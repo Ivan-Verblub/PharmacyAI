@@ -1,0 +1,124 @@
+﻿@typeparam TItem
+
+<div class="entity-table border rounded overflow-hidden">
+    <div class="row g-0 entity-table-header fw-semibold text-secondary">
+        @foreach (var column in Columns)
+        {
+            <div class="@GetColumnClass(column) entity-cell"
+                 @onclick="() => SortChanged.InvokeAsync(column)"
+                 role="button">
+                <span>@column.Header</span>
+
+                @if (SortColumn?.Name == column.Name)
+                {
+                    <span class="ms-1">
+                        @(SortAscending ? "▲" : "▼")
+                    </span>
+                }
+            </div>
+        }
+    </div>
+
+    @if (!Items.Any())
+    {
+        <div class="p-4 text-center text-muted">
+            Записи не найдены
+        </div>
+    }
+
+    @for (var i = 0; i < Items.Count; i++)
+    {
+        var index = i;
+        var item = Items[index];
+        var id = KeySelector(item);
+        var isSelected = SelectedIds.Contains(id);
+
+        <div class="row g-0 entity-table-row border-top @(isSelected ? "entity-table-row-selected" : "")"
+             @onclick="args => SelectRow(index, args)"
+             @ondblclick="() => ItemDoubleClicked.InvokeAsync(item)">
+
+            @foreach (var column in Columns)
+            {
+                <div class="@GetColumnClass(column) entity-cell">
+                    @column.CellTemplate(item)
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<TItem> Items { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<EntityColumn<TItem>> Columns { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public Func<TItem, string> KeySelector { get; set; } = _ => string.Empty;
+
+    [Parameter]
+    public HashSet<string> SelectedIds { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<HashSet<string>> SelectedIdsChanged { get; set; }
+
+    [Parameter]
+    public EntityColumn<TItem>? SortColumn { get; set; }
+
+    [Parameter]
+    public bool SortAscending { get; set; } = true;
+
+    [Parameter]
+    public EventCallback<EntityColumn<TItem>> SortChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<TItem> ItemDoubleClicked { get; set; }
+
+    private int lastSelectedIndex = -1;
+
+    private string GetColumnClass(EntityColumn<TItem> column)
+    {
+        var width = Math.Clamp(column.Width, 1, 12);
+
+        return $"col-12 col-md-{width}";
+    }
+
+    private async Task SelectRow(
+        int index,
+        Microsoft.AspNetCore.Components.Web.MouseEventArgs args)
+    {
+        if (Items is null || Items.Count == 0)
+        {
+            return;
+        }
+
+        if (index < 0 || index >= Items.Count)
+        {
+            return;
+        }
+
+        var selectedId = KeySelector(Items[index]);
+
+        if (args.ShiftKey && lastSelectedIndex >= 0)
+        {
+            var start = Math.Min(lastSelectedIndex, index);
+            var end = Math.Max(lastSelectedIndex, index);
+
+            SelectedIds = [];
+
+            for (var i = start; i <= end; i++)
+            {
+                SelectedIds.Add(KeySelector(Items[i]));
+            }
+        }
+        else
+        {
+            SelectedIds = [selectedId];
+        }
+
+        lastSelectedIndex = index;
+
+        await SelectedIdsChanged.InvokeAsync(SelectedIds);
+    }
+}

@@ -1,0 +1,56 @@
+﻿@using BlazorBootstrap
+
+<Modal @ref="modal"
+       Title="Подтверждение удаления"
+       Size="ModalSize.Regular">
+    <BodyTemplate>
+        <p>
+            Вы действительно хотите удалить выбранные записи?
+        </p>
+
+        <p class="fw-semibold text-danger">
+            Количество удаляемых строк: @Count
+        </p>
+    </BodyTemplate>
+
+    <FooterTemplate>
+        <Button Color="ButtonColor.Secondary"
+                @onclick="Cancel">
+            Отмена
+        </Button>
+
+        <Button Color="ButtonColor.Danger"
+                @onclick="Confirm">
+            Удалить
+        </Button>
+    </FooterTemplate>
+</Modal>
+
+@code {
+    private Modal modal = default!;
+    private TaskCompletionSource<bool>? completion;
+
+    public int Count { get; private set; }
+
+    public async Task<bool> ShowAsync(int count)
+    {
+        Count = count;
+        completion = new TaskCompletionSource<bool>();
+
+        await modal.ShowAsync();
+
+        return await completion.Task;
+    }
+
+    private async Task Confirm()
+    {
+        completion?.SetResult(true);
+        await modal.HideAsync();
+    }
+
+    private async Task Cancel()
+    {
+        completion?.SetResult(false);
+        await modal.HideAsync();
+    }
+}

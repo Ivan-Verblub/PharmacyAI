@@ -1,0 +1,22 @@
+﻿.product-select-dropdown {
+    z-index: 1055;
+    max-height: 285px;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+}
+
+.product-select-item {
+    min-height: 57px;
+    scroll-snap-align: start;
+    border: 0;
+    border-bottom: 1px solid var(--bs-border-color);
+    border-radius: 0;
+}
+
+    .product-select-item:last-child {
+        border-bottom: 0;
+    }
+
+    .product-select-item:hover {
+        background-color: var(--bs-tertiary-bg);
+    }

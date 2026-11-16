@@ -1,0 +1,75 @@
+﻿<nav class="flex-column bg-light border-end p-3"
+     style="min-width: 230px;">
+
+    <div class="fw-bold mb-3">
+        Помощник закупок
+    </div>
+    <ul class="nav flex-column gap-1">
+        <li class="nav-item">
+            <NavLink class="nav-link"
+                     href=""
+                     Match="NavLinkMatch.All">
+                Анализ рекомендаций
+            </NavLink>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link btn btn-link text-start w-100 p-0 d-flex justify-content-between align-items-center"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#dataMenu"
+                    aria-expanded="true"
+                    aria-controls="dataMenu">
+                <span>Данные</span>
+                <span class="small">▾</span>
+            </button>
+
+            <div class="collapse show"
+                 id="dataMenu">
+                <ul class="nav flex-column ms-3 border-start ps-2">
+
+                    <li class="nav-item">
+                        <NavLink class="nav-link py-1"
+                                 href="products"
+                                 Match="NavLinkMatch.All">
+                            Товары
+                        </NavLink>
+                    </li>
+
+                    <li class="nav-item">
+                        <NavLink class="nav-link py-1"
+                                 href="flows"
+                                 Match="NavLinkMatch.All">
+                            Движения
+                        </NavLink>
+                    </li>
+
+                    <li class="nav-item">
+                        <NavLink class="nav-link py-1"
+                                 href="stocks"
+                                 Match="NavLinkMatch.All">
+                            Остатки
+                        </NavLink>
+                    </li>
+
+                    <li class="nav-item">
+                        <NavLink class="nav-link py-1"
+                                 href="recommendations"
+                                 Match="NavLinkMatch.All">
+                            Рекомендации
+                        </NavLink>
+                    </li>
+
+                </ul>
+            </div>
+        </li>
+
+        <li class="nav-item">
+            <NavLink class="nav-link"
+                     href="settings"
+                     Match="NavLinkMatch.All">
+                Настройки
+            </NavLink>
+        </li>
+
+    </ul>
+</nav>

@@ -1,0 +1,94 @@
+﻿@using UI.Models
+@using UI.Services
+
+<div class="position-relative">
+    <label class="form-label">Товар</label>
+
+    <input class="form-control"
+           placeholder="Начните вводить название товара"
+           value="@DisplayText"
+           @oninput="OnSearchChanged"
+           @onfocus="OpenDropdown"
+           autocomplete="off" />
+
+    @if (isOpen && filteredProducts.Count > 0)
+    {
+        <div class="product-select-dropdown position-absolute bg-white border rounded shadow-sm w-100 mt-1">
+            @foreach (var product in filteredProducts)
+            {
+                <button type="button"
+                        class="product-select-item btn btn-light w-100 text-start"
+                        @onclick="() => SelectProduct(product)">
+                    <span class="fw-semibold">@product.Name</span>
+                    <small class="d-block text-muted">@product.Id</small>
+                </button>
+            }
+        </div>
+    }
+
+    @if (isOpen && filteredProducts.Count == 0)
+    {
+        <div class="position-absolute bg-white border rounded shadow-sm w-100 mt-1 p-2 text-muted">
+            Товары не найдены
+        </div>
+    }
+</div>
+
+@code {
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Product> Products { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public string Value { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> ValueChanged { get; set; }
+
+    private string searchText = string.Empty;
+    private string DisplayText => GetProductName(Value);
+    private bool isOpen;
+
+    private List<Product> filteredProducts = [];
+
+    private string GetProductName(string productId)
+    {
+        return Products.FirstOrDefault(x => x.Id == productId)?.Name ?? string.Empty;
+    }
+
+    private void OpenDropdown()
+    {
+        isOpen = true;
+        searchText = string.Empty;
+
+        FilterProducts();
+    }
+
+    private void OnSearchChanged(ChangeEventArgs args)
+    {
+        searchText = args.Value?.ToString() ?? string.Empty;
+        isOpen = true;
+
+        FilterProducts();
+    }
+
+    private void FilterProducts()
+    {
+        filteredProducts = string.IsNullOrWhiteSpace(searchText)
+            ? Products.ToList()
+            : Products
+                .Where(x => x.Name.Contains(
+                    searchText,
+                    StringComparison.OrdinalIgnoreCase))
+                .ToList();
+    }
+
+    private async Task SelectProduct(Product product)
+    {
+        Value = product.Id;
+
+        await ValueChanged.InvokeAsync(Value);
+
+        isOpen = false;
+    }
+}

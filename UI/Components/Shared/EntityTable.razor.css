@@ -1,0 +1,27 @@
+﻿.entity-table-header {
+    background-color: var(--bs-tertiary-bg);
+    font-weight: 600;
+    color: var(--bs-secondary-color);
+}
+
+.entity-cell {
+    padding: 0.65rem 0.75rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.entity-table-row {
+    cursor: pointer;
+}
+
+    .entity-table-row:hover {
+        background-color: var(--bs-tertiary-bg);
+    }
+
+.entity-table-row-selected,
+.entity-table-row-selected:hover {
+    background-color: #cfe2ff;
+    color: #084298;
+}

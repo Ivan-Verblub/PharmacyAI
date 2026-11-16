@@ -1,0 +1,268 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using UI.Models
+@using UI.Components.Shared
+@inject ApiClient Api
+
+<PageTitle>Анализ рекомендаций</PageTitle>
+
+<h1>Анализ рекомендаций</h1>
+
+<div class="d-flex justify-content-between align-items-center mb-3 gap-3 flex-wrap">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+        <span class="badge @(analysisStatus.HasRecommendations ? "bg-success" : "bg-secondary")">
+            @(analysisStatus.HasRecommendations
+                        ? "Рекомендации доступны"
+                        : "Рекомендации отсутствуют")
+        </span>
+
+        <span class="text-muted">
+            Последняя рекомендация:
+            @(analysisStatus.LastRecommendationDate?.ToLocalTime().ToString("g") ?? "нет")
+        </span>
+
+        <span class="text-muted">
+            Всего: @analysisStatus.TotalCount
+        </span>
+    </div>
+
+    <Button Color="ButtonColor.Primary"
+            Disabled="@isAnalyzing"
+            @onclick="OpenAnalysisModalAsync">
+        Анализировать
+    </Button>
+    <input class="form-control"
+           type="date"
+           @bind="analysisTargetDate" />
+</div>
+
+<div class="w-auto mb-3" style="min-width: 320px;">
+    <ProductSelect Products="products"
+                   Value="@selectedProductId"
+                   ValueChanged="OnProductSelectedAsync" />
+</div>
+
+<EntityTable TItem="Recommendation"
+             Items="paged.Items"
+             Columns="recommendationColumns"
+             KeySelector="x => x.Id"
+             SelectedIds="SelectedIds"
+             SortColumn="sortColumn"
+             SortAscending="sortAscending"
+             SortChanged="OnSortChangedAsync" />
+
+<Pagination class="mt-3 justify-content-center"
+            TotalPages="TotalPages"
+            Page="page"
+            PageSize="pageSize"
+            TotalCount="paged.TotalCount"
+            PageChanged="OnPageChangedAsync" />
+
+<Modal @ref="analysisModal"
+       Title="Анализ рекомендаций"
+       Size="ModalSize.Regular">
+
+    <BodyTemplate>
+        <p>
+            Выполняется анализ данных и подготовка рекомендаций по закупкам.
+        </p>
+
+        <div class="progress"
+             role="progressbar"
+             aria-valuenow="@progress"
+             aria-valuemin="0"
+             aria-valuemax="100">
+            <div class="progress-bar progress-bar-striped progress-bar-animated"
+                 style="width: @(progress)%;">
+                @progress%
+            </div>
+        </div>
+
+        @if (analysisError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">
+                @analysisError
+            </div>
+        }
+    </BodyTemplate>
+
+</Modal>
+
+@code {
+    private DateTime analysisTargetDate = DateTime.UtcNow.Date.AddDays(14);
+    private List<EntityColumn<Recommendation>> recommendationColumns = [];
+    private PagedResult<Recommendation> paged = new();
+    private HashSet<string> SelectedIds = [];
+
+    private RecommendationAnalysisStatus analysisStatus = new();
+
+    private List<Product> products = [];
+
+    private string selectedProductId = string.Empty;
+
+    private int page = 1;
+    private int pageSize = 20;
+    private EntityColumn<Recommendation>? sortColumn;
+    private bool sortAscending = true;
+
+    private Modal analysisModal = default!;
+    private bool isAnalyzing;
+    private int progress;
+    private string? analysisError;
+
+    private int TotalPages =>
+        pageSize == 0 ? 0 : (int)Math.Ceiling(paged.TotalCount / (double)pageSize);
+
+    protected override void OnInitialized()
+    {
+        recommendationColumns =
+        [
+            new EntityColumn<Recommendation>
+            {
+                Name = nameof(Recommendation.Date),
+                Header = "Дата рекомендации",
+                Width = 2,
+                ValueSelector = recommendation => recommendation.Date,
+                CellTemplate = recommendation => @<span>
+@recommendation.Date.ToLocalTime().ToString("g")
+</span>
+            },
+
+            new EntityColumn<Recommendation>
+            {
+                Name = "Product",
+                Header = "Товар",
+                Width = 3,
+                ValueSelector = recommendation => recommendation.ProductId,
+                CellTemplate = recommendation => @<span>
+@GetProductName(recommendation.ProductId)
+</span>
+            },
+
+            new EntityColumn<Recommendation>
+            {
+                Name = nameof(Recommendation.Quantity),
+                Header = "Рекомендуемое количество",
+                Width = 2,
+                ValueSelector = recommendation => recommendation.Quantity,
+                CellTemplate = recommendation => @<span>
+@recommendation.Quantity
+</span>
+            },
+
+            new EntityColumn<Recommendation>
+            {
+                Name = nameof(Recommendation.Reason),
+                Header = "Причина",
+                Width = 5,
+                ValueSelector = recommendation => recommendation.Reason,
+                CellTemplate = recommendation => @<span>
+@recommendation.Reason
+</span>
+            }
+        ];
+        sortColumn = recommendationColumns.First(x => x.Name == nameof(Recommendation.Date));
+        sortAscending = false;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProductsAsync();
+        await LoadAnalysisStatusAsync();
+        await LoadAsync();
+    }
+
+    private string GetProductName(string productId)
+    {
+        return products.FirstOrDefault(x => x.Id == productId)?.Name ?? "—";
+    }
+
+    private async Task LoadProductsAsync()
+    {
+        products = await Api.GetAll<Product>("api/products");
+    }
+
+    private async Task LoadAnalysisStatusAsync()
+    {
+        analysisStatus = await Api.GetAnalysisStatusAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        paged = await Api.GetPaged<Recommendation>(
+            "api/recommendations",
+            page,
+            pageSize,
+            selectedProductId,
+            sortColumn.Name,
+            sortAscending);
+
+        SelectedIds = [];
+    }
+
+    private async Task OnProductSelectedAsync(string productId)
+    {
+        selectedProductId = productId;
+        page = 1;
+
+        await LoadAsync();
+    }
+
+    private async Task OnSortChangedAsync(EntityColumn<Recommendation> column)
+    {
+        if (sortColumn?.Name == column.Name)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = column;
+            sortAscending = true;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task OnPageChangedAsync(int newPage)
+    {
+        page = newPage;
+
+        await LoadAsync();
+    }
+
+    private async Task OpenAnalysisModalAsync()
+    {
+        analysisError = null;
+        progress = 0;
+        isAnalyzing = true;
+
+        await analysisModal.ShowAsync();
+
+        try
+        {
+            progress = 25;
+            StateHasChanged();
+
+            await Api.AnalyzeAsync(analysisTargetDate);
+
+            progress = 100;
+            StateHasChanged();
+
+            await LoadAnalysisStatusAsync();
+            await LoadAsync();
+
+            await Task.Delay(500);
+        }
+        catch (HttpRequestException ex)
+        {
+            analysisError = "Не удалось выполнить анализ. Проверьте доступность сервиса рекомендаций.";
+            Console.Error.WriteLine(ex);
+        }
+        finally
+        {
+            isAnalyzing = false;
+
+            await analysisModal.HideAsync();
+        }
+    }
+}

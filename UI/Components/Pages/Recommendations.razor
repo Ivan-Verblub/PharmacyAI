@@ -1,0 +1,258 @@
+﻿@page "/recommendations"
+@rendermode InteractiveServer
+@using UI.Models
+@using UI.Components.Shared
+@inject ApiClient Api
+
+<PageTitle>Рекомендации</PageTitle>
+
+<h1>Рекомендации</h1>
+
+<div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
+    <ProductSelect Products="products"
+                   Value="@selectedProductId"
+                   ValueChanged="OnProductSelectedAsync" />
+
+    <Button Color="ButtonColor.Primary"
+            @onclick="OpenCreateAsync">
+        Добавить
+    </Button>
+</div>
+
+@if (errorMessage is not null)
+{
+    <div class="alert alert-danger">
+        @errorMessage
+    </div>
+}
+
+<EntityTable TItem="Recommendation"
+             Items="paged.Items"
+             Columns="recommendationColumns"
+             KeySelector="x => x.Id"
+             @bind-SelectedIds="SelectedIds"
+             SortColumn="sortColumn"
+             SortAscending="sortAscending"
+             SortChanged="OnSortChangedAsync"
+             ItemDoubleClicked="OpenEditAsync" />
+
+<Pagination class="mt-3 justify-content-center"
+            TotalPages="TotalPages"
+            Page="page"
+            PageSize="pageSize"
+            TotalCount="paged.TotalCount"
+            PageChanged="OnPageChangedAsync" />
+
+<EntityEditModal TItem="Recommendation"
+                 @ref="recommendationModal"
+                 Title="@modalTitle"
+                 Item="editingRecommendation"
+                 FormTemplate="RecommendationForm"
+                 OnSave="SaveRecommendationAsync" />
+
+@code {
+    private List<EntityColumn<Recommendation>> recommendationColumns = [];
+    private PagedResult<Recommendation> paged = new();
+    private HashSet<string> SelectedIds = [];
+    private List<Product> products = [];
+
+    private EntityEditModal<Recommendation> recommendationModal = default!;
+    private Recommendation editingRecommendation = new();
+    private string modalTitle = "Новая рекомендация";
+
+    private string selectedProductId = string.Empty;
+    private string? errorMessage;
+
+    private int page = 1;
+    private int pageSize = 20;
+    private EntityColumn<Recommendation>? sortColumn;
+    private bool sortAscending = true;
+
+    private int TotalPages =>
+        pageSize == 0 ? 0 : (int)Math.Ceiling(paged.TotalCount / (double)pageSize);
+
+    protected override void OnInitialized()
+    {
+        recommendationColumns =
+        [
+            new EntityColumn<Recommendation>
+            {
+                Name = nameof(Recommendation.Date),
+                Header = "Дата",
+                Width = 2,
+                ValueSelector = recommendation => recommendation.Date,
+                CellTemplate = recommendation => @<span>@recommendation.Date.ToLocalTime().ToString("g")</span>
+            },
+
+            new EntityColumn<Recommendation>
+            {
+                Name = "Product",
+                Header = "Товар",
+                Width = 3,
+                ValueSelector = recommendation => recommendation.ProductId,
+                CellTemplate = recommendation => @<span>@GetProductName(recommendation.ProductId)</span>
+            },
+
+            new EntityColumn<Recommendation>
+            {
+                Name = nameof(Recommendation.Quantity),
+                Header = "Количество",
+                Width = 2,
+                ValueSelector = recommendation => recommendation.Quantity,
+                CellTemplate = recommendation => @<span>@recommendation.Quantity</span>
+            },
+
+            new EntityColumn<Recommendation>
+            {
+                Name = nameof(Recommendation.Quantity),
+                Header = "Причина",
+                Width = 5,
+                ValueSelector = recommendation => recommendation.Reason,
+                CellTemplate = recommendation => @<span>@recommendation.Reason</span>
+            }
+
+        ];
+        sortColumn = recommendationColumns.First(x => x.Name == nameof(Recommendation.Date));
+        sortAscending = false;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProductsAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadProductsAsync()
+    {
+        products = await Api.GetAll<Product>("api/products");
+    }
+
+    private string GetProductName(string productId)
+    {
+        return products.FirstOrDefault(x => x.Id == productId)?.Name ?? "—";
+    }
+
+    private RenderFragment<Recommendation> RecommendationForm => recommendation => @<div>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Дата</label>
+                <input class="form-control"
+                       type="datetime-local"
+                       @bind="recommendation.Date" />
+            </div>
+
+            <div class="col-md-4">
+                <ProductSelect Products="products"
+                               @bind-Value="recommendation.ProductId" />
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Количество</label>
+                <input class="form-control"
+                       type="number"
+                       @bind="recommendation.Quantity" />
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Причина</label>
+                <input class="form-control"
+                       type="text"
+                       @bind="recommendation.Reason" />
+            </div>
+        </div>
+    </div>;
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            paged = await Api.GetPaged<Recommendation>(
+                "api/recommendations",
+                page,
+                pageSize,
+                selectedProductId,
+                sortColumn.Name,
+                sortAscending);
+
+            SelectedIds = [];
+            errorMessage = null;
+        }
+        catch (HttpRequestException ex)
+        {
+            errorMessage = "Не удалось загрузить рекомендации. Проверьте подключение к API.";
+            Console.Error.WriteLine(ex);
+        }
+    }
+
+    private async Task OnProductSelectedAsync(string productId)
+    {
+        selectedProductId = productId;
+        page = 1;
+
+        await LoadAsync();
+    }
+
+    private async Task OnSortChangedAsync(EntityColumn<Recommendation> column)
+    {
+        if (sortColumn?.Name == column.Name)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = column;
+            sortAscending = true;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task OnPageChangedAsync(int newPage)
+    {
+        page = newPage;
+
+        await LoadAsync();
+    }
+
+    private async Task OpenCreateAsync()
+    {
+        modalTitle = "Новая рекомендация";
+        editingRecommendation = new Recommendation();
+
+        await recommendationModal.ShowAsync(editingRecommendation);
+    }
+
+    private async Task OpenEditAsync(Recommendation recommendation)
+    {
+        modalTitle = "Редактирование рекомендации";
+
+        editingRecommendation = new Recommendation
+        {
+            Id = recommendation.Id,
+            Date = recommendation.Date,
+            ProductId = recommendation.ProductId,
+            Quantity = recommendation.Quantity
+        };
+
+        await recommendationModal.ShowAsync(editingRecommendation);
+    }
+
+    private async Task SaveRecommendationAsync(Recommendation recommendation)
+    {
+        if (string.IsNullOrWhiteSpace(recommendation.ProductId))
+        {
+            throw new InvalidOperationException("ID товара обязательно.");
+        }
+
+        if (string.IsNullOrWhiteSpace(recommendation.Id))
+        {
+            await Api.Create("api/recommendations", recommendation);
+        }
+        else
+        {
+            await Api.Update("api/recommendations", recommendation.Id, recommendation);
+        }
+
+        await LoadAsync();
+    }
+}

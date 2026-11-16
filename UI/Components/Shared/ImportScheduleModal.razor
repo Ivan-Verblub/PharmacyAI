@@ -1,0 +1,234 @@
+﻿@using UI.Models
+
+<Modal @ref="modal"
+       Title="@Title"
+       Size="ModalSize.Large">
+
+    <BodyTemplate>
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input"
+                   type="checkbox"
+                   id="schedule-enabled"
+                   @bind="Settings.IsEnabled" />
+
+            <label class="form-check-label" for="schedule-enabled">
+                Включить автоматический импорт
+            </label>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Режим повтора</label>
+
+                <select class="form-select" @bind="Settings.RepeatMode">
+                    <option value="Interval">Через интервал</option>
+                    <option value="Daily">Ежедневно</option>
+                    <option value="Weekly">По дням недели</option>
+                    <option value="Monthly">Ежемесячно</option>
+                </select>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Интервал, сек.</label>
+                <input class="form-control"
+                       type="number"
+                       min="1"
+                       @bind="Settings.RepeatIntervalSeconds" />
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Время начала</label>
+                <input class="form-control"
+                       type="time"
+                       @bind="Settings.StartTime" />
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Время окончания</label>
+                <input class="form-control"
+                       type="time"
+                       @bind="Settings.EndTime" />
+            </div>
+
+            @if (Settings.RepeatMode == "Daily")
+            {
+                <div class="col-md-6">
+                    <label class="form-label">Повторять каждые N дней</label>
+                    <input class="form-control"
+                           type="number"
+                           min="1"
+                           @bind="Settings.EveryDays" />
+                </div>
+            }
+
+            @if (Settings.RepeatMode == "Weekly")
+            {
+                <div class="col-12">
+                    <label class="form-label">Дни недели</label>
+
+                    <div class="d-flex flex-wrap gap-3">
+                        @foreach (var day in Days)
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       value="@day.Value"
+                                       checked="@Settings.DaysOfWeek.Contains(day.Value)"
+                                       @onchange="args => ToggleDay(day.Value, (bool)args.Value)" />
+
+                                <label class="form-check-label">
+                                    @day.Text
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (Settings.RepeatMode == "Monthly")
+            {
+                <div class="col-md-6">
+                    <label class="form-label">День месяца</label>
+                    <input class="form-control"
+                           type="number"
+                           min="1"
+                           max="31"
+                           @bind="Settings.DayOfMonth" />
+                </div>
+            }
+
+            <div class="col-md-4">
+                <div class="form-check form-switch">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           id="skip-holidays"
+                           @bind="Settings.SkipHolidays" />
+
+                    <label class="form-check-label" for="skip-holidays">
+                        Пропускать праздники
+                    </label>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="form-check form-switch">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           id="run-immediately"
+                           @bind="Settings.RunImmediatelyAfterSave" />
+
+                    <label class="form-check-label" for="run-immediately">
+                        Запустить сразу после сохранения
+                    </label>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="form-check form-switch">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           id="stop-on-error"
+                           @bind="Settings.StopOnError" />
+
+                    <label class="form-check-label" for="stop-on-error">
+                        Останавливать при ошибке
+                    </label>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Максимальное число попыток</label>
+                <input class="form-control"
+                       type="number"
+                       min="1"
+                       @bind="Settings.MaxAttempts" />
+            </div>
+        </div>
+    </BodyTemplate>
+
+    <FooterTemplate>
+        <Button Color="ButtonColor.Secondary"
+                @onclick="CancelAsync">
+            Отмена
+        </Button>
+
+        <Button Color="ButtonColor.Success"
+                @onclick="SaveAsync">
+            Сохранить
+        </Button>
+    </FooterTemplate>
+
+</Modal>
+
+@code {
+    private Modal? modal;
+    private TaskCompletionSource<bool>? completion;
+
+    [Parameter, EditorRequired]
+    public ImportScheduleSettings Settings { get; set; } = new();
+
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback OnSave { get; set; }
+
+    private readonly List<(string Value, string Text)> Days =
+    [
+        ("Monday", "Понедельник"),
+        ("Tuesday", "Вторник"),
+        ("Wednesday", "Среда"),
+        ("Thursday", "Четверг"),
+        ("Friday", "Пятница"),
+        ("Saturday", "Суббота"),
+        ("Sunday", "Воскресенье")
+    ];
+
+    public async Task<bool> ShowAsync()
+    {
+        completion = new TaskCompletionSource<bool>();
+
+        if (modal is null)
+        {
+            return false;
+        }
+
+        await modal.ShowAsync();
+
+        return await completion.Task;
+    }
+
+    private async Task ToggleDay(string day, bool isChecked)
+    {
+        if (isChecked)
+        {
+            Settings.DaysOfWeek.Add(day);
+        }
+        else
+        {
+            Settings.DaysOfWeek.Remove(day);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        completion?.TrySetResult(true);
+
+        await OnSave.InvokeAsync();
+
+        if (modal is not null)
+        {
+            await modal.HideAsync();
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        completion?.TrySetResult(false);
+
+        if (modal is not null)
+        {
+            await modal.HideAsync();
+        }
+    }
+}

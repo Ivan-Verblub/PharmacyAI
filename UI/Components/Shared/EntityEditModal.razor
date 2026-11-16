@@ -1,0 +1,121 @@
+﻿@typeparam TItem
+
+<Modal @ref="modal"
+       Title="@Title"
+       Size="@Size">
+
+    <BodyTemplate>
+        @if (ErrorMessage is not null)
+        {
+            <div class="alert alert-danger">
+                @ErrorMessage
+            </div>
+        }
+
+        @FormTemplate(Item)
+    </BodyTemplate>
+
+    <FooterTemplate>
+        <Button Color="ButtonColor.Secondary"
+                Type="ButtonType.Button"
+                Disabled="@IsSaving"
+                @onclick="CancelAsync">
+            Отмена
+        </Button>
+
+        <Button Color="ButtonColor.Success"
+                Type="ButtonType.Button"
+                Disabled="@IsSaving"
+                @onclick="SaveAsync">
+            @(IsSaving ? "Сохранение..." : "Сохранить")
+        </Button>
+    </FooterTemplate>
+
+</Modal>
+
+@code {
+    private Modal? modal;
+    private TaskCompletionSource<bool>? completion;
+
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public ModalSize Size { get; set; } = ModalSize.Large;
+
+    [Parameter, EditorRequired]
+    public TItem Item { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public RenderFragment<TItem> FormTemplate { get; set; } = _ => builder => { };
+
+    [Parameter]
+    public EventCallback<TItem> OnSave { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    public bool IsSaving { get; private set; }
+    public string? ErrorMessage { get; private set; }
+
+    public async Task<bool> ShowAsync(TItem item)
+    {
+        Item = item;
+        ErrorMessage = null;
+        IsSaving = false;
+
+        completion = new TaskCompletionSource<bool>();
+
+        if (modal is null)
+        {
+            return false;
+        }
+
+        await modal.ShowAsync();
+
+        return await completion.Task;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (Item is null || OnSave.HasDelegate is false)
+        {
+            return;
+        }
+
+        try
+        {
+            IsSaving = true;
+            ErrorMessage = null;
+
+            await OnSave.InvokeAsync(Item);
+
+            completion?.TrySetResult(true);
+
+            if (modal is not null)
+            {
+                await modal.HideAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        completion?.TrySetResult(false);
+
+        await OnCancel.InvokeAsync();
+
+        if (modal is not null)
+        {
+            await modal.HideAsync();
+        }
+    }
+}

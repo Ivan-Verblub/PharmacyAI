@@ -1,0 +1,230 @@
+﻿@page "/settings"
+@rendermode InteractiveServer
+@using UI.Models
+@inject ApiClient Api
+
+<PageTitle>Настройки</PageTitle>
+
+<h1>Настройки</h1>
+
+@if (errorMessage is not null)
+{
+    <div class="alert alert-danger">
+        @errorMessage
+    </div>
+}
+
+@if (successMessage is not null)
+{
+    <div class="alert alert-success">
+        @successMessage
+    </div>
+}
+
+<div class="card mb-4">
+    <div class="card-header fw-semibold">
+        Подключение к ИИ-модели
+    </div>
+
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Провайдер</label>
+
+                <select class="form-select" @bind="settings.Ai.Provider">
+                    <option value="OpenAI">OpenAI</option>
+                    <option value="AzureOpenAI">Azure OpenAI</option>
+                    <option value="Ollama">Ollama</option>
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Модель</label>
+                <input class="form-control"
+                       @bind="settings.Ai.Model" />
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Base URL</label>
+                <input class="form-control"
+                       @bind="settings.Ai.BaseUrl" />
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Таймаут, сек.</label>
+                <input class="form-control"
+                       type="number"
+                       @bind="settings.Ai.TimeoutSeconds" />
+            </div>
+
+            <div class="col-12">
+                <label class="form-label">API Key</label>
+                <input class="form-control"
+                       type="password"
+                       @bind="settings.Ai.ApiKey" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header fw-semibold">
+        Импорт данных
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-4">
+            <ImportSettingsCard Title="Товары"
+                                EntityType="Product"
+                                Settings="settings.Product"
+                                OnScheduleClicked="() => OpenScheduleModalAsync(settings.Product, nameof(Product))"
+                                OnImportClicked="() => ImportNowAsync(nameof(Product))" />
+        </div>
+
+        <div class="col-md-4">
+            <ImportSettingsCard Title="Движения"
+                                EntityType="Flow"
+                                Settings="settings.Flow"
+                                OnScheduleClicked="() => OpenScheduleModalAsync(settings.Flow, nameof(Flow))"
+                                OnImportClicked="() => ImportNowAsync(nameof(Flow))" />
+        </div>
+
+        <div class="col-md-4">
+            <ImportSettingsCard Title="Остатки"
+                                EntityType="Stock"
+                                Settings="settings.Stock"
+                                OnScheduleClicked="() => OpenScheduleModalAsync(settings.Stock, nameof(Stock))"
+                                OnImportClicked="() => ImportNowAsync(nameof(Stock))" />
+        </div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-end gap-2">
+    <Button Color="ButtonColor.Secondary"
+            @onclick="LoadSettingsAsync">
+        Отменить
+    </Button>
+
+    <Button Color="ButtonColor.Success"
+            @onclick="SaveSettingsAsync">
+        Сохранить
+    </Button>
+</div>
+
+<ImportScheduleModal @ref="scheduleModal"
+                     Settings="editingSchedule"
+                     Title="@scheduleTitle"
+                     OnSave="SaveScheduleAsync" />
+
+@code {
+    private IntegrationSettings settings = new();
+
+    private ImportScheduleModal scheduleModal = default!;
+    private ImportScheduleSettings editingSchedule = new();
+    private string scheduleTitle = "Расписание импорта";
+    private string? editingEntityType;
+
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettingsAsync();
+    }
+
+    private async Task LoadSettingsAsync()
+    {
+        try
+        {
+            settings = await Api.GetSettingsAsync();
+            errorMessage = null;
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "Не удалось загрузить настройки.";
+        }
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        try
+        {
+            await Api.SaveSettingsAsync(settings);
+
+            successMessage = "Настройки сохранены.";
+            errorMessage = null;
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "Не удалось сохранить настройки.";
+            successMessage = null;
+        }
+    }
+
+    private async Task OpenScheduleModalAsync(
+        ImportSettings importSettings,
+        string entityType)
+    {
+        editingEntityType = entityType;
+        editingSchedule = CloneSchedule(importSettings.Schedule);
+        scheduleTitle = $"Расписание импорта: {entityType}";
+
+        await scheduleModal.ShowAsync();
+    }
+
+    private async Task SaveScheduleAsync()
+    {
+        if (editingEntityType == "Product")
+        {
+            settings.Product.Schedule = CloneSchedule(editingSchedule);
+        }
+        else if (editingEntityType == "Flow")
+        {
+            settings.Flow.Schedule = CloneSchedule(editingSchedule);
+        }
+        else if (editingEntityType == "Stock")
+        {
+            settings.Stock.Schedule = CloneSchedule(editingSchedule);
+        }
+
+        await SaveSettingsAsync();
+
+        successMessage = "Расписание сохранено.";
+    }
+
+    private async Task ImportNowAsync(string entityType)
+    {
+        try
+        {
+            await Api.ImportNowAsync(entityType);
+
+            successMessage = $"Импорт {entityType} запущен.";
+            errorMessage = null;
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = $"Не удалось запустить импорт {entityType}.";
+            successMessage = null;
+        }
+    }
+
+    private static ImportScheduleSettings CloneSchedule(
+        ImportScheduleSettings source)
+    {
+        return new ImportScheduleSettings
+        {
+            IsEnabled = source.IsEnabled,
+            DaysOfWeek = [.. source.DaysOfWeek],
+            StartTime = source.StartTime,
+            EndTime = source.EndTime,
+            RepeatIntervalSeconds = source.RepeatIntervalSeconds,
+            RepeatMode = source.RepeatMode,
+            EveryDays = source.EveryDays,
+            DayOfMonth = source.DayOfMonth,
+            SkipHolidays = source.SkipHolidays,
+            RunImmediatelyAfterSave = source.RunImmediatelyAfterSave,
+            StopOnError = source.StopOnError,
+            MaxAttempts = source.MaxAttempts
+        };
+    }
+}
