@@ -8,7 +8,7 @@
 
 <h1>Товары</h1>
 
-<div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
+<div class="toolbar">
     <input class="form-control w-auto"
            placeholder="Поиск по названию"
            @bind="search"
@@ -54,6 +54,7 @@
 @code {
     private List<EntityColumn<Product>> productColumns = [];
     private PagedResult<Product> paged = new();
+    private List<MeasureUnit> units = [];
     private HashSet<string> SelectedIds = [];
 
     private EntityEditModal<Product> productModal = default!;
@@ -80,7 +81,7 @@
             {
                 Name = nameof(Product.Name),
                 Header = "Название",
-                Width = 8,
+                Width = 4,
                 ValueSelector = product => product.Name,
                 CellTemplate = product => @<span>@product.Name</span>
             },
@@ -88,7 +89,7 @@
             new EntityColumn<Product>
             {
                 Name = nameof(Product.DeliveryDays),
-                Header = "Дней доставки",
+                Header = "Доставка, дн.",
                 Width = 2,
                 ValueSelector = product => product.DeliveryDays,
                 CellTemplate = product => @<span>@product.DeliveryDays</span>
@@ -97,19 +98,51 @@
             new EntityColumn<Product>
             {
                 Name = nameof(Product.StorageLife),
-                Header = "Срок хранения",
+                Header = "Срок хранения, дн.",
                 Width = 2,
                 ValueSelector = product => product.StorageLife,
                 CellTemplate = product => @<span>@product.StorageLife</span>
+            },
+
+            new EntityColumn<Product>
+            {
+                Name = nameof(Product.UnitId),
+                Header = "Ед. изм. / закупки",
+                Width = 2,
+                ValueSelector = product => product.UnitId,
+                CellTemplate = product => @<span>@GetUnitName(product.UnitId)@(product.PurchaseUnitRatio > 1 ? $" / {GetUnitName(product.PurchaseUnitId ?? product.UnitId)} ×{product.PurchaseUnitRatio}" : string.Empty)</span>
+            },
+
+            new EntityColumn<Product>
+            {
+                Name = nameof(Product.MinPurchaseQuantity),
+                Header = "Мин. закупка",
+                Width = 2,
+                ValueSelector = product => product.MinPurchaseQuantity,
+                CellTemplate = product => @<span>@(product.MinPurchaseQuantity > 0 ? $"{product.MinPurchaseQuantity} {GetUnitName(product.UnitId)}" : "—")</span>
             }
         ];
         sortColumn = productColumns.First(x => x.Name == nameof(Product.Name));
-        sortAscending = false;
+        sortAscending = true;
     }
 
     protected override async Task OnInitializedAsync()
     {
+        try
+        {
+            units = await Api.GetAll<MeasureUnit>("api/units");
+        }
+        catch (HttpRequestException ex)
+        {
+            Console.Error.WriteLine(ex);
+        }
+
         await LoadAsync();
+    }
+
+    private string GetUnitName(string? unitId)
+    {
+        return units.FirstOrDefault(x => x.Id == unitId)?.DisplayName ?? "шт.";
     }
 
     private RenderFragment<Product> ProductForm => product => @<div>
@@ -132,6 +165,53 @@
                    type="number"
                    @bind="product.StorageLife" />
         </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <label class="form-label">Базовая единица измерения</label>
+                <select class="form-select" @bind="product.UnitId">
+                    @foreach (var unit in units)
+                    {
+                        <option value="@unit.Id">@unit.Name (@unit.DisplayName)</option>
+                    }
+                </select>
+                <div class="form-text">В ней ведутся движения, остатки и рекомендации.</div>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Единица закупки</label>
+                <select class="form-select"
+                        value="@(product.PurchaseUnitId ?? string.Empty)"
+                        @onchange="args => product.PurchaseUnitId = string.IsNullOrWhiteSpace(args.Value?.ToString()) ? null : args.Value!.ToString()">
+                    <option value="">Как базовая</option>
+                    @foreach (var unit in units)
+                    {
+                        <option value="@unit.Id">@unit.Name (@unit.DisplayName)</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Базовых единиц в единице закупки</label>
+                <input class="form-control"
+                       type="number"
+                       min="1"
+                       @bind="product.PurchaseUnitRatio" />
+                <div class="form-text">Итог закупки округляется до кратного.</div>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Минимальная обязательная закупка, @GetUnitName(product.UnitId)</label>
+            <input class="form-control"
+                   type="number"
+                   min="0"
+                   @bind="product.MinPurchaseQuantity" />
+            <div class="form-text">
+                Закупается в каждом филиале безусловно — даже при нулевом спросе или достаточном остатке.
+                0 — без обязательного минимума.
+            </div>
+        </div>
     </div>;
 
     private async Task LoadAsync()
@@ -143,8 +223,8 @@
                 page,
                 pageSize,
                 appliedSearch,
-                sortColumn.Name,
-                sortAscending);
+                sortColumn?.Name,
+                !sortAscending);
 
             SelectedIds = [];
             errorMessage = null;
@@ -203,7 +283,11 @@
             Id = product.Id,
             Name = product.Name,
             DeliveryDays = product.DeliveryDays,
-            StorageLife = product.StorageLife
+            StorageLife = product.StorageLife,
+            UnitId = product.UnitId,
+            PurchaseUnitId = product.PurchaseUnitId,
+            PurchaseUnitRatio = product.PurchaseUnitRatio,
+            MinPurchaseQuantity = product.MinPurchaseQuantity
         };
 
         await productModal.ShowAsync(editingProduct);
@@ -214,6 +298,16 @@
         if (string.IsNullOrWhiteSpace(product.Name))
         {
             throw new InvalidOperationException("Название товара обязательно.");
+        }
+
+        if (product.PurchaseUnitRatio < 1)
+        {
+            throw new InvalidOperationException("Коэффициент единицы закупки должен быть не меньше 1.");
+        }
+
+        if (product.MinPurchaseQuantity < 0)
+        {
+            throw new InvalidOperationException("Минимальная закупка не может быть отрицательной.");
         }
 
         if (string.IsNullOrWhiteSpace(product.Id))

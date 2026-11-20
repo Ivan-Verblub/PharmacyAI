@@ -8,11 +8,20 @@
 
 <h1>Движения</h1>
 
-<div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
-    <div class="w-auto" style="min-width: 280px;">
-        <ProductSelect Products="products"
-                       Value="@selectedProductId"
-                       ValueChanged="OnProductSelectedAsync" />
+<div class="toolbar">
+    <div class="d-flex gap-3 flex-wrap align-items-end">
+        <div style="min-width: 280px;">
+            <ProductSelect Products="products"
+                           Value="@selectedProductId"
+                           ValueChanged="OnProductSelectedAsync" />
+        </div>
+
+        <div style="min-width: 220px;">
+            <BranchSelect Branches="branches"
+                          IncludeAll="true"
+                          Value="@selectedBranchId"
+                          ValueChanged="OnBranchSelectedAsync" />
+        </div>
     </div>
 
     <Button Color="ButtonColor.Primary"
@@ -57,6 +66,9 @@
     private PagedResult<Flow> paged = new();
     private HashSet<string> SelectedIds = [];
     private List<Product> products = [];
+    private List<Branch> branches = [];
+    private List<MeasureUnit> units = [];
+    private string selectedBranchId = string.Empty;
 
     private EntityEditModal<Flow> flowModal = default!;
     private Flow editingFlow = new();
@@ -81,7 +93,7 @@
             {
                 Name = nameof(Flow.Date),
                 Header = "Дата",
-                Width = 3,
+                Width = 2,
                 ValueSelector = flow => flow.Date,
                 CellTemplate = flow => @<span>@flow.Date.ToLocalTime().ToString("g")</span>
             },
@@ -97,18 +109,27 @@
 
             new EntityColumn<Flow>
             {
+                Name = nameof(Flow.BranchId),
+                Header = "Филиал",
+                Width = 2,
+                ValueSelector = flow => flow.BranchId,
+                CellTemplate = flow => @<span>@GetBranchName(flow.BranchId)</span>
+            },
+
+            new EntityColumn<Flow>
+            {
                 Name = nameof(Flow.QuantityIncome),
                 Header = "Приход",
                 Width = 2,
                 ValueSelector = flow => flow.QuantityIncome,
-                CellTemplate = flow => @<span>@flow.QuantityIncome</span>
+                CellTemplate = flow => @<span>@flow.QuantityIncome @GetUnitName(flow.ProductId)</span>
             },
 
             new EntityColumn<Flow>
             {
                 Name = nameof(Flow.QuantityOutcome),
                 Header = "Расход",
-                Width = 2,
+                Width = 1,
                 ValueSelector = flow => flow.QuantityOutcome,
                 CellTemplate = flow => @<span>@flow.QuantityOutcome</span>
             },
@@ -140,6 +161,26 @@
         return products.FirstOrDefault(x => x.Id == productId)?.Name ?? "—";
     }
 
+    private string GetBranchName(string branchId)
+    {
+        return branches.FirstOrDefault(x => x.Id == branchId)?.Name ?? "—";
+    }
+
+    private string GetUnitName(string productId)
+    {
+        var unitId = products.FirstOrDefault(x => x.Id == productId)?.UnitId;
+
+        return units.FirstOrDefault(x => x.Id == unitId)?.DisplayName ?? "шт.";
+    }
+
+    private async Task OnBranchSelectedAsync(string branchId)
+    {
+        selectedBranchId = branchId;
+        page = 1;
+
+        await LoadAsync();
+    }
+
     protected override async Task OnInitializedAsync()
     {
         await LoadProductsAsync();
@@ -149,6 +190,8 @@
     private async Task LoadProductsAsync()
     {
         products = await Api.GetAll<Product>("api/products");
+        branches = await Api.GetAll<Branch>("api/branches");
+        units = await Api.GetAll<MeasureUnit>("api/units");
     }
 
     private RenderFragment<Flow> FlowForm => flow => @<div>
@@ -163,6 +206,11 @@
             <div class="col-md-6">
                 <ProductSelect Products="products"
                                @bind-Value="flow.ProductId" />
+            </div>
+
+            <div class="col-md-6">
+                <BranchSelect Branches="branches"
+                              @bind-Value="flow.BranchId" />
             </div>
 
             <div class="col-md-3">
@@ -204,8 +252,9 @@
                 page,
                 pageSize,
                 selectedProductId,
-                sortColumn.Name,
-                sortAscending);
+                sortColumn?.Name,
+                !sortAscending,
+                selectedBranchId);
 
             SelectedIds = [];
             errorMessage = null;
@@ -250,7 +299,10 @@
     private async Task OpenCreateAsync()
     {
         modalTitle = "Новое движение";
-        editingFlow = new Flow();
+        editingFlow = new Flow
+        {
+            BranchId = string.IsNullOrWhiteSpace(selectedBranchId) ? Branch.DefaultId : selectedBranchId
+        };
 
         await flowModal.ShowAsync(editingFlow);
     }
@@ -264,6 +316,7 @@
             Id = flow.Id,
             Date = flow.Date,
             ProductId = flow.ProductId,
+            BranchId = flow.BranchId,
             QuantityIncome = flow.QuantityIncome,
             QuantityOutcome = flow.QuantityOutcome,
             ReserveIncome = flow.ReserveIncome,

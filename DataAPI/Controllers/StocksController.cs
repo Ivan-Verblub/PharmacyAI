@@ -47,7 +47,8 @@ public class StocksController : ControllerBase
     [FromQuery] int pageSize = 20,
     [FromQuery] string? search = null,
     [FromQuery] string? sortBy = null,
-    [FromQuery] bool sortDescending = false)
+    [FromQuery] bool sortDescending = false,
+    [FromQuery] string? branchId = null)
     {
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = 20;
@@ -59,7 +60,7 @@ public class StocksController : ControllerBase
             CacheKeys.Stocks,
             page,
             pageSize,
-            productId,
+            $"{productId}|branch={branchId}",
             sortBy,
             sortDescending);
 
@@ -75,6 +76,11 @@ public class StocksController : ControllerBase
         if (!string.IsNullOrWhiteSpace(productId))
         {
             query = query.Where(x => x.ProductId == productId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(branchId))
+        {
+            query = query.Where(x => x.BranchId == branchId);
         }
 
         query = ApplySorting(query, sortBy, sortDescending);
@@ -106,6 +112,10 @@ public class StocksController : ControllerBase
     {
         return sortBy switch
         {
+            nameof(Stock.BranchId) => sortDescending
+                ? query.OrderByDescending(x => x.BranchId)
+                : query.OrderBy(x => x.BranchId),
+
             nameof(Stock.ProductId) => sortDescending
                 ? query.OrderByDescending(x => x.ProductId)
                 : query.OrderBy(x => x.ProductId),
@@ -178,6 +188,16 @@ public class StocksController : ControllerBase
             return BadRequest($"Product '{stock.ProductId}' does not exist.");
         }
 
+        if (string.IsNullOrWhiteSpace(stock.BranchId))
+        {
+            stock.BranchId = Branch.DefaultId;
+        }
+
+        if (await session.LoadAsync<Branch>(stock.BranchId) is null)
+        {
+            return BadRequest($"Branch '{stock.BranchId}' does not exist.");
+        }
+
         stock.Id = Guid.NewGuid().ToString();
 
         await session.StoreAsync(stock, stock.Id);
@@ -212,7 +232,18 @@ public class StocksController : ControllerBase
             return BadRequest($"Product '{stock.ProductId}' does not exist.");
         }
 
+        if (string.IsNullOrWhiteSpace(stock.BranchId))
+        {
+            stock.BranchId = Branch.DefaultId;
+        }
+
+        if (await session.LoadAsync<Branch>(stock.BranchId) is null)
+        {
+            return BadRequest($"Branch '{stock.BranchId}' does not exist.");
+        }
+
         existing.ProductId = stock.ProductId;
+        existing.BranchId = stock.BranchId;
         existing.Quantity = stock.Quantity;
         existing.Reserve = stock.Reserve;
         existing.Transit = stock.Transit;

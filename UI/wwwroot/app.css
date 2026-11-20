@@ -1,27 +1,355 @@
+/* =========================================================
+   Фирменный стиль 4iT (брендбук 2025)
+   Палитра: #98CBF2, #326EB6, #24598D; нейтральные #19171A, #F4F4F4, #DBDBDB
+   Заголовки — Engravers Gothic, подзаголовки — Montserrat Medium,
+   основной текст — Montserrat Light.
+   ========================================================= */
+
+@font-face {
+    font-family: 'Engravers Gothic';
+    src: url('fonts/EngraversGothic.woff2') format('woff2'),
+         url('fonts/EngraversGothic.woff') format('woff');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root {
+    --brand-light: #98CBF2;
+    --brand: #326EB6;
+    --brand-dark: #24598D;
+    --brand-ink: #19171A;
+    --brand-bg: #F4F4F4;
+    --brand-line: #DBDBDB;
+
+    --font-heading: 'Engravers Gothic', 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+    --font-body: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+
+    --bs-body-font-family: var(--font-body);
+    --bs-body-font-weight: 300;
+    --bs-body-color: var(--brand-ink);
+    --bs-body-bg: var(--brand-bg);
+    --bs-border-color: var(--brand-line);
+    --bs-primary: var(--brand);
+    --bs-primary-rgb: 50, 110, 182;
+    --bs-link-color: var(--brand);
+    --bs-link-color-rgb: 50, 110, 182;
+    --bs-link-hover-color: var(--brand-dark);
+    --bs-link-hover-color-rgb: 36, 89, 141;
+    --bs-tertiary-bg: #EAF3FC;
+    --bs-secondary-color: #5B5960;
+    --bs-border-radius: 0.375rem;
+}
+
 html, body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: var(--font-body);
+    font-weight: 300;
+    color: var(--brand-ink);
+    background-color: var(--brand-bg);
 }
 
-a, .btn-link {
-    color: #006bb7;
+strong, b, .fw-semibold, .fw-bold {
+    font-weight: 600;
 }
 
-.btn-primary {
-    color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
+.fw-medium {
+    font-weight: 500;
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+/* ---------- Заголовки ---------- */
+
+h1, .h1 {
+    font-family: var(--font-heading);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 1.75rem;
+    color: var(--brand-ink);
+    margin-bottom: 1.5rem;
+}
+
+h2, h3, .h2, .h3 {
+    font-family: var(--font-heading);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+h4, h5, h6, .card-header, .modal-title, .form-label, th {
+    font-family: var(--font-body);
+    font-weight: 500;
+}
+
+h1:focus {
+    outline: none;
+}
+
+/* ---------- Каркас ---------- */
+
+.app-shell {
+    min-height: 100vh;
+}
+
+.app-main {
+    padding: 2rem 2.25rem;
+    min-width: 0;
 }
 
 .content {
     padding-top: 1.1rem;
 }
 
-h1:focus {
-    outline: none;
+.toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+/* ---------- Боковое меню ---------- */
+
+.brand-sidebar {
+    position: relative;
+    min-width: 248px;
+    max-width: 248px;
+    min-height: 100vh;
+    color: #fff;
+    background: linear-gradient(165deg, var(--brand) 0%, var(--brand-dark) 60%, #1E4A77 100%);
+    overflow: hidden;
+}
+
+/* Фирменный паттерн — шестерёнка */
+.brand-sidebar::after {
+    content: "";
+    position: absolute;
+    right: -70px;
+    bottom: -60px;
+    width: 260px;
+    height: 260px;
+    background: url('img/favicon.svg') no-repeat center / contain;
+    opacity: 0.12;
+    pointer-events: none;
+}
+
+.brand-sidebar > * {
+    position: relative;
+    z-index: 1;
+}
+
+.brand-logo img {
+    display: block;
+}
+
+.brand-product {
+    font-weight: 500;
+    font-size: 0.8rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--brand-light);
+}
+
+.brand-sidebar .nav-link {
+    color: rgba(255, 255, 255, 0.86);
+    font-weight: 400;
+    border-radius: 0.375rem;
+    padding: 0.45rem 0.75rem;
+    border: 0;
+    background: transparent;
+}
+
+.brand-sidebar .nav-link:hover,
+.brand-sidebar .nav-link:focus-visible {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.10);
+}
+
+.brand-sidebar .nav-link.active {
+    color: #fff;
+    font-weight: 500;
+    background: rgba(152, 203, 242, 0.22);
+    box-shadow: inset 3px 0 0 var(--brand-light);
+}
+
+.brand-sidebar .nav-group {
+    font-weight: 500;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--brand-light);
+    margin-top: 0.75rem;
+}
+
+.brand-sidebar .nav-sub {
+    margin-left: 0.5rem;
+    padding-left: 0.5rem;
+    border-left: 1px solid rgba(152, 203, 242, 0.35);
+}
+
+.brand-sidebar .nav-sub .nav-link {
+    padding: 0.3rem 0.75rem;
+}
+
+.brand-values {
+    font-size: 0.68rem;
+    line-height: 1.5;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* ---------- Ссылки и кнопки ---------- */
+
+a, .btn-link {
+    color: var(--brand);
+}
+
+a:hover, .btn-link:hover {
+    color: var(--brand-dark);
+}
+
+.btn {
+    font-weight: 500;
+}
+
+.btn-primary {
+    --bs-btn-color: #fff;
+    --bs-btn-bg: var(--brand);
+    --bs-btn-border-color: var(--brand);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--brand-dark);
+    --bs-btn-hover-border-color: var(--brand-dark);
+    --bs-btn-active-bg: var(--brand-dark);
+    --bs-btn-active-border-color: var(--brand-dark);
+    --bs-btn-disabled-bg: var(--brand);
+    --bs-btn-disabled-border-color: var(--brand);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--brand);
+    --bs-btn-border-color: var(--brand);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--brand);
+    --bs-btn-hover-border-color: var(--brand);
+    --bs-btn-active-bg: var(--brand-dark);
+    --bs-btn-active-border-color: var(--brand-dark);
+}
+
+.btn-success {
+    --bs-btn-color: #fff;
+    --bs-btn-bg: var(--brand-dark);
+    --bs-btn-border-color: var(--brand-dark);
+    --bs-btn-hover-bg: #1C4A76;
+    --bs-btn-hover-border-color: #1C4A76;
+    --bs-btn-active-bg: #1C4A76;
+    --bs-btn-disabled-bg: var(--brand-dark);
+    --bs-btn-disabled-border-color: var(--brand-dark);
+}
+
+.btn-secondary {
+    --bs-btn-color: var(--brand-ink);
+    --bs-btn-bg: #fff;
+    --bs-btn-border-color: var(--brand-line);
+    --bs-btn-hover-color: var(--brand-ink);
+    --bs-btn-hover-bg: var(--brand-bg);
+    --bs-btn-hover-border-color: #C4C4C4;
+    --bs-btn-active-bg: var(--brand-line);
+    --bs-btn-disabled-color: #8A888E;
+    --bs-btn-disabled-bg: #fff;
+    --bs-btn-disabled-border-color: var(--brand-line);
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-select:focus, .form-check-input:focus {
+    box-shadow: 0 0 0 0.1rem #fff, 0 0 0 0.25rem rgba(50, 110, 182, 0.45);
+}
+
+.period-switch {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+
+/* ---------- Формы ---------- */
+
+.form-control, .form-select {
+    border-color: var(--brand-line);
+    font-weight: 400;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--brand);
+}
+
+.form-check-input:checked {
+    background-color: var(--brand);
+    border-color: var(--brand);
+}
+
+.form-text {
+    color: #6B6970;
+}
+
+.branch-picker {
+    background: #fff;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+/* ---------- Карточки, таблицы, бейджи ---------- */
+
+.card {
+    border-color: var(--brand-line);
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 2px rgba(25, 23, 26, 0.04);
+}
+
+.card-header {
+    background: #fff;
+    border-bottom: 2px solid var(--brand-light);
+    color: var(--brand-dark);
+    font-size: 0.85rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.85rem 1.25rem;
+}
+
+.table-brand {
+    --bs-table-bg: #fff;
+    --bs-table-active-bg: #EAF3FC;
+}
+
+.table-brand thead th {
+    background: var(--brand-bg);
+    color: #5B5960;
+    font-size: 0.8rem;
+    border-bottom: 1px solid var(--brand-line);
+}
+
+.table-brand tfoot th {
+    background: var(--brand-bg);
+    border-top: 2px solid var(--brand-line);
+}
+
+.badge-brand {
+    background-color: var(--brand);
+    color: #fff;
+    font-weight: 500;
+}
+
+.progress-bar {
+    background-color: var(--brand);
+}
+
+.pagination {
+    --bs-pagination-color: var(--brand);
+    --bs-pagination-hover-color: var(--brand-dark);
+    --bs-pagination-active-bg: var(--brand);
+    --bs-pagination-active-border-color: var(--brand);
+    --bs-pagination-focus-box-shadow: 0 0 0 0.25rem rgba(50, 110, 182, 0.35);
+}
+
+.modal-header {
+    border-bottom: 2px solid var(--brand-light);
 }
 
 .valid.modified:not([type=checkbox]) {

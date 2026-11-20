@@ -10,6 +10,7 @@ public record RecommendationAnalysisResult(
 
 public record RecommendationAnalysisItem(
     string ProductId,
+    string? BranchId,
     DateTime TargetDate,
     int Quantity,
     string Reason);
@@ -28,22 +29,67 @@ public class RecommendationAnalysisService
         _httpClient = httpClient;
         _configuration = configuration;
         _logger = logger;
+        _httpClient.Timeout = TimeSpan.FromMinutes(10);
     }
 
+    private const int BatchSize = 20;
+    private static readonly Uri ChatCompletionsUri =
+        new("http://localhost:11434/v1/chat/completions");
+
+    /// <summary>
+    /// Отправляет позиции в модель пакетами. Позиции, которые модель не вернула
+    /// или не смогла обработать, сохраняются с расчётным количеством и
+    /// детерминированным пояснением — обязательный минимум не теряется.
+    /// </summary>
     public async Task<IReadOnlyList<ProductForecastContext>> AnalyzeAsync(
         RecommendationPrompt prompt,
         IProgress<int>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        var result = new List<ProductForecastContext>();
+
+        if (prompt.Products.Count == 0)
+        {
+            progress?.Report(100);
+            return result;
+        }
+
+        var batches = prompt.Products.Chunk(BatchSize).ToList();
+
+        for (var i = 0; i < batches.Count; i++)
+        {
+            var batch = batches[i];
+            IReadOnlyList<RecommendationAnalysisItem> items = [];
+
+            try
+            {
+                items = await AnalyzeBatchAsync(prompt, batch, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException
+                                       || !cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "AI analysis failed for batch {Batch}. Using precalculated recommendations.",
+                    i + 1);
+            }
+
+            result.AddRange(MapToContexts(batch, items));
+
+            progress?.Report(Math.Min(95, 10 + (i + 1) * 85 / batches.Count));
+        }
+
+        progress?.Report(100);
+
+        return result;
+    }
+
+    private async Task<IReadOnlyList<RecommendationAnalysisItem>> AnalyzeBatchAsync(
+        RecommendationPrompt prompt,
+        IReadOnlyList<ProductForecastContext> products,
+        CancellationToken cancellationToken)
+    {
         var apiKey = "ollama";
-
-        //if (string.IsNullOrWhiteSpace(apiKey))
-        //{
-        //    _logger.LogWarning(
-        //        "OpenAI API key is not configured. Returning precalculated recommendations.");
-
-        //    return prompt.Products;
-        //}
 
         var requestData = new
         {
@@ -62,8 +108,12 @@ public class RecommendationAnalysisService
                     content = JsonSerializer.Serialize(new
                     {
                         targetDate = prompt.TargetDate.ToString("yyyy-MM-dd"),
+                        purchaseFrom = prompt.PurchaseFrom.ToString("yyyy-MM-dd"),
+                        purchaseTo = prompt.PurchaseTo.ToString("yyyy-MM-dd"),
+                        analysisFrom = prompt.AnalysisFrom.ToString("yyyy-MM-dd"),
+                        analysisTo = prompt.AnalysisTo.ToString("yyyy-MM-dd"),
                         serviceLevelZ = prompt.ServiceLevelZ,
-                        products = prompt.Products
+                        products
                     })
                 }
             },
@@ -71,13 +121,12 @@ public class RecommendationAnalysisService
             {
                 type = "json_object"
             },
-            max_completion_tokens = 2000
+            max_completion_tokens = 4000
         };
-        _httpClient.BaseAddress = new Uri("http://localhost:11434/v1/");
-        _httpClient.Timeout = TimeSpan.FromMinutes(10);
+
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            "chat/completions");
+            ChatCompletionsUri);
 
         request.Headers.Authorization =
             new AuthenticationHeaderValue("Bearer", apiKey);
@@ -99,14 +148,13 @@ public class RecommendationAnalysisService
         response.EnsureSuccessStatusCode();
 
         await using var stream = await response.Content
-            .ReadAsStreamAsync(cancellationToken);
+            .ReadAsStreamAsync(linkedCts.Token);
 
         using var reader = new StreamReader(stream);
 
         var contentBuilder = new StringBuilder();
-        var receivedChunks = 0;
 
-        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        while (await reader.ReadLineAsync(linkedCts.Token) is { } line)
         {
             if (!line.StartsWith("data: "))
             {
@@ -136,22 +184,13 @@ public class RecommendationAnalysisService
             {
                 contentBuilder.Append(content.GetString());
             }
-
-            receivedChunks++;
-
-            if (receivedChunks % 5 == 0)
-            {
-                progress?.Report(Math.Min(90, 25 + receivedChunks));
-            }
         }
-
-        progress?.Report(95);
 
         var modelContent = contentBuilder.ToString();
 
         if (string.IsNullOrWhiteSpace(modelContent))
         {
-            _logger.LogWarning("OpenAI returned an empty response.");
+            _logger.LogWarning("AI model returned an empty response.");
 
             return [];
         }
@@ -167,34 +206,49 @@ public class RecommendationAnalysisService
             analysis.Recommendations.Count == 0)
         {
             _logger.LogWarning(
-                "OpenAI returned no recommendations. Response: {Response}",
+                "AI model returned no recommendations. Response: {Response}",
                 modelContent);
 
             return [];
         }
 
-        return MapToContexts(prompt, analysis.Recommendations);
+        return analysis.Recommendations;
     }
 
     private static IReadOnlyList<ProductForecastContext> MapToContexts(
-        RecommendationPrompt prompt,
+        IReadOnlyList<ProductForecastContext> contexts,
         IReadOnlyList<RecommendationAnalysisItem> recommendations)
     {
         var result = new List<ProductForecastContext>();
 
-        foreach (var recommendation in recommendations)
+        foreach (var context in contexts)
         {
-            var context = prompt.Products
-                .FirstOrDefault(x => x.ProductId == recommendation.ProductId);
+            var recommendation = recommendations.FirstOrDefault(x =>
+                    x.ProductId == context.ProductId &&
+                    (string.IsNullOrWhiteSpace(x.BranchId) || x.BranchId == context.BranchId));
 
-            if (context is null)
+            if (recommendation is null)
             {
+                // Модель пропустила позицию — оставляем расчётное значение.
+                result.Add(context with
+                {
+                    Reason = RecommendationPreparationService.BuildFallbackReason(context)
+                });
+
                 continue;
             }
 
+            // Модель может уменьшить количество, но не ниже обязательного минимума
+            // и не выше расчётного значения; итог округляется до единицы закупки.
+            var lowerBound = Math.Min(context.MinPurchaseQuantity, context.PrecalculatedQuantity);
+
             var quantity = Math.Clamp(
                 recommendation.Quantity,
-                0,
+                lowerBound,
+                context.PrecalculatedQuantity);
+
+            quantity = Math.Min(
+                RecommendationPreparationService.RoundUpToRatio(quantity, context.PurchaseUnitRatio),
                 context.PrecalculatedQuantity);
 
             if (quantity <= 0)
@@ -202,10 +256,20 @@ public class RecommendationAnalysisService
                 continue;
             }
 
+            var reason = string.IsNullOrWhiteSpace(recommendation.Reason)
+                ? RecommendationPreparationService.BuildFallbackReason(context)
+                : recommendation.Reason;
+
+            if (context.MinPurchaseApplied && quantity == context.PrecalculatedQuantity
+                && !reason.Contains("минимум", StringComparison.OrdinalIgnoreCase))
+            {
+                reason += $" Применён обязательный минимум закупки {context.MinPurchaseQuantity} {context.UnitName}.";
+            }
+
             result.Add(context with
             {
                 PrecalculatedQuantity = quantity,
-                Reason = recommendation.Reason
+                Reason = reason
             });
         }
 
@@ -247,6 +311,7 @@ public class RecommendationAnalysisService
           "recommendations": [
             {
               "productId": "string",
+              "branchId": "string",
               "targetDate": "YYYY-MM-DD",
               "quantity": 0,
               "reason": "string"
@@ -254,10 +319,19 @@ public class RecommendationAnalysisService
           ]
         }
 
+        Контекст расчёта:
+        - Потребность рассчитана на период закупки purchaseFrom–purchaseTo (horizonDays дней).
+        - История спроса взята за период analysisFrom–analysisTo.
+        - Каждая позиция относится к конкретному филиалу (branchId, branchName).
+        - Количество указано в базовой единице unitName; закупка кратна purchaseUnitRatio.
+
         Правила:
-        - Оставляй только товары, для которых projectedStockAtTargetDate меньше reorderPoint.
+        - Верни запись для каждой пары productId + branchId из входных данных.
         - quantity должна быть целым числом больше 0.
         - quantity не должна превышать precalculatedQuantity.
+        - quantity не должна быть меньше minPurchaseQuantity: это обязательный минимум закупки.
+        - Если minPurchaseApplied = true, объясни в reason, что закупка выполняется из-за обязательного минимума.
+        - branchId должен совпадать с branchId из входных данных.
         - targetDate должен совпадать с переданной целевой датой.
         - productId должен совпадать с productId из входных данных.
         - reason должен быть написан на русском языке и соответствовать требованиям выше.

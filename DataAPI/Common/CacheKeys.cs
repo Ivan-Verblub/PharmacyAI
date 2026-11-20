@@ -6,6 +6,8 @@
         public const string Flows = "flows";
         public const string Stocks = "stocks";
         public const string Recommendations = "recommendations";
+        public const string Branches = "branches";
+        public const string Units = "units";
 
         public static string All(string entity) => $"{entity}:all";
 

@@ -8,10 +8,21 @@
 
 <h1>Рекомендации</h1>
 
-<div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
-    <ProductSelect Products="products"
-                   Value="@selectedProductId"
-                   ValueChanged="OnProductSelectedAsync" />
+<div class="toolbar">
+    <div class="d-flex gap-3 flex-wrap align-items-end">
+        <div style="min-width: 280px;">
+            <ProductSelect Products="products"
+                           Value="@selectedProductId"
+                           ValueChanged="OnProductSelectedAsync" />
+        </div>
+
+        <div style="min-width: 220px;">
+            <BranchSelect Branches="branches"
+                          IncludeAll="true"
+                          Value="@selectedBranchId"
+                          ValueChanged="OnBranchSelectedAsync" />
+        </div>
+    </div>
 
     <Button Color="ButtonColor.Primary"
             @onclick="OpenCreateAsync">
@@ -55,6 +66,9 @@
     private PagedResult<Recommendation> paged = new();
     private HashSet<string> SelectedIds = [];
     private List<Product> products = [];
+    private List<Branch> branches = [];
+    private List<MeasureUnit> units = [];
+    private string selectedBranchId = string.Empty;
 
     private EntityEditModal<Recommendation> recommendationModal = default!;
     private Recommendation editingRecommendation = new();
@@ -78,10 +92,10 @@
             new EntityColumn<Recommendation>
             {
                 Name = nameof(Recommendation.Date),
-                Header = "Дата",
+                Header = "Период закупки",
                 Width = 2,
                 ValueSelector = recommendation => recommendation.Date,
-                CellTemplate = recommendation => @<span>@recommendation.Date.ToLocalTime().ToString("g")</span>
+                CellTemplate = recommendation => @<span title="@PurchasePeriodTitle(recommendation)">@FormatPeriod(recommendation)</span>
             },
 
             new EntityColumn<Recommendation>
@@ -95,18 +109,33 @@
 
             new EntityColumn<Recommendation>
             {
-                Name = nameof(Recommendation.Quantity),
-                Header = "Количество",
+                Name = nameof(Recommendation.BranchId),
+                Header = "Филиал",
                 Width = 2,
-                ValueSelector = recommendation => recommendation.Quantity,
-                CellTemplate = recommendation => @<span>@recommendation.Quantity</span>
+                ValueSelector = recommendation => recommendation.BranchId,
+                CellTemplate = recommendation => @<span>@GetBranchName(recommendation.BranchId)</span>
             },
 
             new EntityColumn<Recommendation>
             {
                 Name = nameof(Recommendation.Quantity),
+                Header = "Количество",
+                Width = 2,
+                ValueSelector = recommendation => recommendation.Quantity,
+                CellTemplate = recommendation => @<span title="Расчёт: @recommendation.CalculatedQuantity, минимум: @recommendation.MinPurchaseQuantity">
+                    @FormatQuantity(recommendation)
+                    @if (recommendation.MinPurchaseApplied)
+                    {
+                        <span class="badge badge-brand ms-1">мин.</span>
+                    }
+                </span>
+            },
+
+            new EntityColumn<Recommendation>
+            {
+                Name = nameof(Recommendation.Reason),
                 Header = "Причина",
-                Width = 5,
+                Width = 3,
                 ValueSelector = recommendation => recommendation.Reason,
                 CellTemplate = recommendation => @<span>@recommendation.Reason</span>
             }
@@ -125,11 +154,62 @@
     private async Task LoadProductsAsync()
     {
         products = await Api.GetAll<Product>("api/products");
+        branches = await Api.GetAll<Branch>("api/branches");
+        units = await Api.GetAll<MeasureUnit>("api/units");
     }
 
     private string GetProductName(string productId)
     {
         return products.FirstOrDefault(x => x.Id == productId)?.Name ?? "—";
+    }
+
+    private string GetBranchName(string branchId)
+    {
+        return branches.FirstOrDefault(x => x.Id == branchId)?.Name ?? "—";
+    }
+
+    private string GetUnitName(string? unitId)
+    {
+        return units.FirstOrDefault(x => x.Id == unitId)?.DisplayName ?? "шт.";
+    }
+
+    private string FormatQuantity(Recommendation recommendation)
+    {
+        var product = products.FirstOrDefault(x => x.Id == recommendation.ProductId);
+        var text = $"{recommendation.Quantity} {GetUnitName(product?.UnitId)}";
+
+        if (product is not null && product.PurchaseUnitRatio > 1)
+        {
+            var packs = recommendation.PurchaseUnitQuantity > 0
+                ? recommendation.PurchaseUnitQuantity
+                : (int)Math.Ceiling(recommendation.Quantity / (double)product.PurchaseUnitRatio);
+
+            text += $" ({packs} {GetUnitName(product.PurchaseUnitId ?? product.UnitId)})";
+        }
+
+        return text;
+    }
+
+    private static string FormatPeriod(Recommendation recommendation)
+    {
+        return recommendation.PurchaseFrom.HasValue && recommendation.PurchaseTo.HasValue
+            ? $"{recommendation.PurchaseFrom:dd.MM.yy}–{recommendation.PurchaseTo:dd.MM.yy}"
+            : recommendation.Date.ToLocalTime().ToString("d");
+    }
+
+    private static string PurchasePeriodTitle(Recommendation recommendation)
+    {
+        return recommendation.AnalysisFrom.HasValue && recommendation.AnalysisTo.HasValue
+            ? $"Анализ истории: {recommendation.AnalysisFrom:dd.MM.yyyy}–{recommendation.AnalysisTo:dd.MM.yyyy}"
+            : string.Empty;
+    }
+
+    private async Task OnBranchSelectedAsync(string branchId)
+    {
+        selectedBranchId = branchId;
+        page = 1;
+
+        await LoadAsync();
     }
 
     private RenderFragment<Recommendation> RecommendationForm => recommendation => @<div>
@@ -147,13 +227,18 @@
             </div>
 
             <div class="col-md-4">
+                <BranchSelect Branches="branches"
+                              @bind-Value="recommendation.BranchId" />
+            </div>
+
+            <div class="col-md-4">
                 <label class="form-label">Количество</label>
                 <input class="form-control"
                        type="number"
                        @bind="recommendation.Quantity" />
             </div>
 
-            <div class="col-md-4">
+            <div class="col-md-8">
                 <label class="form-label">Причина</label>
                 <input class="form-control"
                        type="text"
@@ -171,8 +256,9 @@
                 page,
                 pageSize,
                 selectedProductId,
-                sortColumn.Name,
-                sortAscending);
+                sortColumn?.Name,
+                !sortAscending,
+                selectedBranchId);
 
             SelectedIds = [];
             errorMessage = null;
@@ -217,7 +303,10 @@
     private async Task OpenCreateAsync()
     {
         modalTitle = "Новая рекомендация";
-        editingRecommendation = new Recommendation();
+        editingRecommendation = new Recommendation
+        {
+            BranchId = string.IsNullOrWhiteSpace(selectedBranchId) ? Branch.DefaultId : selectedBranchId
+        };
 
         await recommendationModal.ShowAsync(editingRecommendation);
     }
@@ -231,7 +320,17 @@
             Id = recommendation.Id,
             Date = recommendation.Date,
             ProductId = recommendation.ProductId,
-            Quantity = recommendation.Quantity
+            BranchId = recommendation.BranchId,
+            Quantity = recommendation.Quantity,
+            CalculatedQuantity = recommendation.CalculatedQuantity,
+            MinPurchaseQuantity = recommendation.MinPurchaseQuantity,
+            PurchaseUnitQuantity = recommendation.PurchaseUnitQuantity,
+            Reason = recommendation.Reason,
+            AnalysisFrom = recommendation.AnalysisFrom,
+            AnalysisTo = recommendation.AnalysisTo,
+            PurchaseFrom = recommendation.PurchaseFrom,
+            PurchaseTo = recommendation.PurchaseTo,
+            PurchasePeriod = recommendation.PurchasePeriod
         };
 
         await recommendationModal.ShowAsync(editingRecommendation);

@@ -47,7 +47,8 @@ public class FlowsController : ControllerBase
     [FromQuery] int pageSize = 20,
     [FromQuery] string? search = null,
     [FromQuery] string? sortBy = null,
-    [FromQuery] bool sortDescending = false)
+    [FromQuery] bool sortDescending = false,
+    [FromQuery] string? branchId = null)
     {
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = 20;
@@ -59,7 +60,7 @@ public class FlowsController : ControllerBase
             CacheKeys.Flows,
             page,
             pageSize,
-            productId,
+            $"{productId}|branch={branchId}",
             sortBy,
             sortDescending);
 
@@ -75,6 +76,11 @@ public class FlowsController : ControllerBase
         if (!string.IsNullOrWhiteSpace(productId))
         {
             query = query.Where(x => x.ProductId == productId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(branchId))
+        {
+            query = query.Where(x => x.BranchId == branchId);
         }
 
         query = ApplySorting(query, sortBy, sortDescending);
@@ -109,6 +115,10 @@ public class FlowsController : ControllerBase
             nameof(Flow.Date) => sortDescending
                 ? query.OrderByDescending(x => x.Date)
                 : query.OrderBy(x => x.Date),
+
+            nameof(Flow.BranchId) => sortDescending
+                ? query.OrderByDescending(x => x.BranchId)
+                : query.OrderBy(x => x.BranchId),
 
             nameof(Flow.ProductId) => sortDescending
                 ? query.OrderByDescending(x => x.ProductId)
@@ -178,6 +188,16 @@ public class FlowsController : ControllerBase
             return BadRequest($"Product '{flow.ProductId}' does not exist.");
         }
 
+        if (string.IsNullOrWhiteSpace(flow.BranchId))
+        {
+            flow.BranchId = Branch.DefaultId;
+        }
+
+        if (await session.LoadAsync<Branch>(flow.BranchId) is null)
+        {
+            return BadRequest($"Branch '{flow.BranchId}' does not exist.");
+        }
+
         flow.Id = Guid.NewGuid().ToString();
 
         await session.StoreAsync(flow, flow.Id);
@@ -213,7 +233,18 @@ public class FlowsController : ControllerBase
         }
 
         existing.Date = flow.Date;
+        if (string.IsNullOrWhiteSpace(flow.BranchId))
+        {
+            flow.BranchId = Branch.DefaultId;
+        }
+
+        if (await session.LoadAsync<Branch>(flow.BranchId) is null)
+        {
+            return BadRequest($"Branch '{flow.BranchId}' does not exist.");
+        }
+
         existing.ProductId = flow.ProductId;
+        existing.BranchId = flow.BranchId;
         existing.QuantityIncome = flow.QuantityIncome;
         existing.QuantityOutcome = flow.QuantityOutcome;
         existing.ReserveIncome = flow.ReserveIncome;

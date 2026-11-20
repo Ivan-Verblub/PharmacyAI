@@ -1,0 +1,46 @@
+@using UI.Models
+
+<div>
+    @if (!string.IsNullOrWhiteSpace(Label))
+    {
+        <label class="form-label">@Label</label>
+    }
+
+    <select class="form-select"
+            value="@Value"
+            @onchange="OnChangedAsync">
+        @if (IncludeAll)
+        {
+            <option value="">Все филиалы</option>
+        }
+
+        @foreach (var branch in Branches.Where(x => x.IsActive || x.Id == Value))
+        {
+            <option value="@branch.Id">@branch.Name</option>
+        }
+    </select>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Branch> Branches { get; set; } = [];
+
+    [Parameter]
+    public string Value { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> ValueChanged { get; set; }
+
+    [Parameter]
+    public bool IncludeAll { get; set; }
+
+    [Parameter]
+    public string Label { get; set; } = "Филиал";
+
+    private async Task OnChangedAsync(ChangeEventArgs args)
+    {
+        Value = args.Value?.ToString() ?? string.Empty;
+
+        await ValueChanged.InvokeAsync(Value);
+    }
+}

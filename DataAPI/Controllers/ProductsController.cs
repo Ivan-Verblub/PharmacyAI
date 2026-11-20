@@ -78,6 +78,14 @@ public class ProductsController : ControllerBase
                 ? items.OrderByDescending(x => x.StorageLife).ToList()
                 : items.OrderBy(x => x.StorageLife).ToList(),
 
+            nameof(Product.MinPurchaseQuantity) => sortDescending
+                ? items.OrderByDescending(x => x.MinPurchaseQuantity).ToList()
+                : items.OrderBy(x => x.MinPurchaseQuantity).ToList(),
+
+            nameof(Product.UnitId) => sortDescending
+                ? items.OrderByDescending(x => x.UnitId).ToList()
+                : items.OrderBy(x => x.UnitId).ToList(),
+
             _ => sortDescending
                 ? items.OrderByDescending(x => x.Name).ToList()
                 : items.OrderBy(x => x.Name).ToList()
@@ -149,6 +157,13 @@ public class ProductsController : ControllerBase
 
         using var session = _raven.OpenSession();
 
+        var validationError = await ValidateProductAsync(session, product);
+
+        if (validationError is not null)
+        {
+            return BadRequest(validationError);
+        }
+
         await session.StoreAsync(product, product.Id);
         await session.SaveChangesAsync();
 
@@ -174,9 +189,20 @@ public class ProductsController : ControllerBase
             return NotFound();
         }
 
+        var validationError = await ValidateProductAsync(session, product);
+
+        if (validationError is not null)
+        {
+            return BadRequest(validationError);
+        }
+
         existing.Name = product.Name;
         existing.DeliveryDays = product.DeliveryDays;
         existing.StorageLife = product.StorageLife;
+        existing.UnitId = product.UnitId;
+        existing.PurchaseUnitId = product.PurchaseUnitId;
+        existing.PurchaseUnitRatio = product.PurchaseUnitRatio;
+        existing.MinPurchaseQuantity = product.MinPurchaseQuantity;
 
         await session.SaveChangesAsync();
 
@@ -203,6 +229,44 @@ public class ProductsController : ControllerBase
         _raven.InvalidateCache(CacheKeys.Products);
 
         return NoContent();
+    }
+
+    private static async Task<string?> ValidateProductAsync(
+        IAsyncDocumentSession session,
+        Product product)
+    {
+        if (string.IsNullOrWhiteSpace(product.UnitId))
+        {
+            product.UnitId = Unit.DefaultId;
+        }
+
+        if (string.IsNullOrWhiteSpace(product.PurchaseUnitId))
+        {
+            product.PurchaseUnitId = null;
+        }
+
+        if (product.PurchaseUnitRatio < 1)
+        {
+            return "Коэффициент единицы закупки должен быть не меньше 1.";
+        }
+
+        if (product.MinPurchaseQuantity < 0)
+        {
+            return "Минимальное количество закупки не может быть отрицательным.";
+        }
+
+        if (await session.LoadAsync<Unit>(product.UnitId) is null)
+        {
+            return $"Единица измерения '{product.UnitId}' не найдена.";
+        }
+
+        if (product.PurchaseUnitId is not null
+            && await session.LoadAsync<Unit>(product.PurchaseUnitId) is null)
+        {
+            return $"Единица закупки '{product.PurchaseUnitId}' не найдена.";
+        }
+
+        return null;
     }
 
     private void CacheResult<T>(string key, T value, string entity)

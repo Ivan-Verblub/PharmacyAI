@@ -1,9 +1,13 @@
-﻿<nav class="flex-column bg-light border-end p-3"
-     style="min-width: 230px;">
+<nav class="brand-sidebar d-flex flex-column p-3">
 
-    <div class="fw-bold mb-3">
+    <a class="brand-logo d-block mb-1" href="">
+        <img src="img/logo-4it-white.svg" alt="4iT" height="34" />
+    </a>
+
+    <div class="brand-product mb-4">
         Помощник закупок
     </div>
+
     <ul class="nav flex-column gap-1">
         <li class="nav-item">
             <NavLink class="nav-link"
@@ -12,8 +16,9 @@
                 Анализ рекомендаций
             </NavLink>
         </li>
+
         <li class="nav-item">
-            <button class="nav-link btn btn-link text-start w-100 p-0 d-flex justify-content-between align-items-center"
+            <button class="nav-link nav-group text-start w-100 d-flex justify-content-between align-items-center"
                     type="button"
                     data-bs-toggle="collapse"
                     data-bs-target="#dataMenu"
@@ -25,40 +30,43 @@
 
             <div class="collapse show"
                  id="dataMenu">
-                <ul class="nav flex-column ms-3 border-start ps-2">
-
+                <ul class="nav flex-column nav-sub">
                     <li class="nav-item">
-                        <NavLink class="nav-link py-1"
-                                 href="products"
-                                 Match="NavLinkMatch.All">
-                            Товары
-                        </NavLink>
+                        <NavLink class="nav-link" href="products" Match="NavLinkMatch.All">Товары</NavLink>
                     </li>
-
                     <li class="nav-item">
-                        <NavLink class="nav-link py-1"
-                                 href="flows"
-                                 Match="NavLinkMatch.All">
-                            Движения
-                        </NavLink>
+                        <NavLink class="nav-link" href="flows" Match="NavLinkMatch.All">Движения</NavLink>
                     </li>
-
                     <li class="nav-item">
-                        <NavLink class="nav-link py-1"
-                                 href="stocks"
-                                 Match="NavLinkMatch.All">
-                            Остатки
-                        </NavLink>
+                        <NavLink class="nav-link" href="stocks" Match="NavLinkMatch.All">Остатки</NavLink>
                     </li>
-
                     <li class="nav-item">
-                        <NavLink class="nav-link py-1"
-                                 href="recommendations"
-                                 Match="NavLinkMatch.All">
-                            Рекомендации
-                        </NavLink>
+                        <NavLink class="nav-link" href="recommendations" Match="NavLinkMatch.All">Рекомендации</NavLink>
                     </li>
+                </ul>
+            </div>
+        </li>
 
+        <li class="nav-item">
+            <button class="nav-link nav-group text-start w-100 d-flex justify-content-between align-items-center"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#catalogMenu"
+                    aria-expanded="true"
+                    aria-controls="catalogMenu">
+                <span>Справочники</span>
+                <span class="small">▾</span>
+            </button>
+
+            <div class="collapse show"
+                 id="catalogMenu">
+                <ul class="nav flex-column nav-sub">
+                    <li class="nav-item">
+                        <NavLink class="nav-link" href="branches" Match="NavLinkMatch.All">Филиалы</NavLink>
+                    </li>
+                    <li class="nav-item">
+                        <NavLink class="nav-link" href="units" Match="NavLinkMatch.All">Единицы измерения</NavLink>
+                    </li>
                 </ul>
             </div>
         </li>
@@ -70,6 +78,9 @@
                 Настройки
             </NavLink>
         </li>
-
     </ul>
+
+    <div class="brand-values mt-auto pt-4">
+        автоматизация · ответственность · прозрачность · вовлеченность
+    </div>
 </nav>

@@ -18,7 +18,13 @@ public class FileImportReader
             Id = GetValue(x, "Id"),
             Name = GetValue(x, "Name"),
             DeliveryDays = GetInt(x, "DeliveryDays"),
-            StorageLife = GetInt(x, "StorageLife")
+            StorageLife = GetInt(x, "StorageLife"),
+            UnitId = GetValue(x, "UnitId", Unit.DefaultId),
+            PurchaseUnitId = string.IsNullOrWhiteSpace(GetValue(x, "PurchaseUnitId"))
+                ? null
+                : GetValue(x, "PurchaseUnitId"),
+            PurchaseUnitRatio = Math.Max(1, GetInt(x, "PurchaseUnitRatio")),
+            MinPurchaseQuantity = Math.Max(0, GetInt(x, "MinPurchaseQuantity"))
         }).ToList();
     }
 
@@ -33,6 +39,7 @@ public class FileImportReader
             Id = GetValue(x, "Id"),
             Date = GetDate(x, "Date"),
             ProductId = GetValue(x, "ProductId"),
+            BranchId = GetValue(x, "BranchId", Branch.DefaultId),
             QuantityIncome = GetInt(x, "QuantityIncome"),
             QuantityOutcome = GetInt(x, "QuantityOutcome"),
             ReserveIncome = GetInt(x, "ReserveIncome"),
@@ -50,6 +57,7 @@ public class FileImportReader
         {
             Id = GetValue(x, "Id"),
             ProductId = GetValue(x, "ProductId"),
+            BranchId = GetValue(x, "BranchId", Branch.DefaultId),
             Quantity = GetInt(x, "Quantity"),
             Reserve = GetInt(x, "Reserve"),
             Transit = GetInt(x, "Transit")
@@ -153,6 +161,16 @@ public class FileImportReader
         return row.TryGetValue(key, out var value)
             ? value
             : string.Empty;
+    }
+
+    private static string GetValue(
+        Dictionary<string, string> row,
+        string key,
+        string defaultValue)
+    {
+        var value = GetValue(row, key);
+
+        return string.IsNullOrWhiteSpace(value) ? defaultValue : value;
     }
 
     private static int GetInt(

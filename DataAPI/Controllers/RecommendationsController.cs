@@ -18,12 +18,15 @@ public class RecommendationsController : ControllerBase
     private readonly IRavenDbService _raven;
     private readonly RecommendationPreparationService _recommendationPreparationService;
     private readonly RecommendationAnalysisService _recommendationAnalysisService;
+    private readonly IntegrationSettingsStore _settingsStore;
 
     public RecommendationsController(
         IRavenDbService raven,
         RecommendationPreparationService recommendationPreparationService,
-        RecommendationAnalysisService recommendationAnalysisService)
+        RecommendationAnalysisService recommendationAnalysisService,
+        IntegrationSettingsStore settingsStore)
     {
+        _settingsStore = settingsStore;
         _raven = raven;
         _recommendationPreparationService = recommendationPreparationService;
         _recommendationAnalysisService = recommendationAnalysisService;
@@ -56,7 +59,8 @@ public class RecommendationsController : ControllerBase
     [FromQuery] int pageSize = 20,
     [FromQuery] string? search = null,
     [FromQuery] string? sortBy = null,
-    [FromQuery] bool sortDescending = false)
+    [FromQuery] bool sortDescending = false,
+    [FromQuery] string? branchId = null)
     {
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = 20;
@@ -68,7 +72,7 @@ public class RecommendationsController : ControllerBase
             CacheKeys.Recommendations,
             page,
             pageSize,
-            productId,
+            $"{productId}|branch={branchId}",
             sortBy,
             sortDescending);
 
@@ -84,6 +88,11 @@ public class RecommendationsController : ControllerBase
         if (!string.IsNullOrWhiteSpace(productId))
         {
             query = query.Where(x => x.ProductId == productId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(branchId))
+        {
+            query = query.Where(x => x.BranchId == branchId);
         }
 
         query = ApplySorting(query, sortBy, sortDescending);
@@ -118,6 +127,14 @@ public class RecommendationsController : ControllerBase
             nameof(Recommendation.Date) => sortDescending
                 ? query.OrderByDescending(x => x.Date)
                 : query.OrderBy(x => x.Date),
+
+            nameof(Recommendation.BranchId) => sortDescending
+                ? query.OrderByDescending(x => x.BranchId)
+                : query.OrderBy(x => x.BranchId),
+
+            nameof(Recommendation.CalculatedQuantity) => sortDescending
+                ? query.OrderByDescending(x => x.CalculatedQuantity)
+                : query.OrderBy(x => x.CalculatedQuantity),
 
             nameof(Recommendation.ProductId) => sortDescending
                 ? query.OrderByDescending(x => x.ProductId)
@@ -183,6 +200,16 @@ public class RecommendationsController : ControllerBase
             return BadRequest($"Product '{recommendation.ProductId}' does not exist.");
         }
 
+        if (string.IsNullOrWhiteSpace(recommendation.BranchId))
+        {
+            recommendation.BranchId = Branch.DefaultId;
+        }
+
+        if (await session.LoadAsync<Branch>(recommendation.BranchId) is null)
+        {
+            return BadRequest($"Branch '{recommendation.BranchId}' does not exist.");
+        }
+
         recommendation.Id = Guid.NewGuid().ToString();
 
         await session.StoreAsync(recommendation, recommendation.Id);
@@ -217,8 +244,19 @@ public class RecommendationsController : ControllerBase
             return BadRequest($"Product '{recommendation.ProductId}' does not exist.");
         }
 
+        if (string.IsNullOrWhiteSpace(recommendation.BranchId))
+        {
+            recommendation.BranchId = Branch.DefaultId;
+        }
+
+        if (await session.LoadAsync<Branch>(recommendation.BranchId) is null)
+        {
+            return BadRequest($"Branch '{recommendation.BranchId}' does not exist.");
+        }
+
         existing.Date = recommendation.Date;
         existing.ProductId = recommendation.ProductId;
+        existing.BranchId = recommendation.BranchId;
         existing.Quantity = recommendation.Quantity;
         existing.Reason = recommendation.Reason;
 
@@ -280,8 +318,46 @@ public class RecommendationsController : ControllerBase
         {
             HasRecommendations = count > 0,
             LastRecommendationDate = lastRecommendation?.Date,
-            TotalCount = count
+            TotalCount = count,
+            AnalysisFrom = lastRecommendation?.AnalysisFrom,
+            AnalysisTo = lastRecommendation?.AnalysisTo,
+            PurchaseFrom = lastRecommendation?.PurchaseFrom,
+            PurchaseTo = lastRecommendation?.PurchaseTo,
+            PurchasePeriod = lastRecommendation?.PurchasePeriod ?? string.Empty
         });
+    }
+
+    /// <summary>
+    /// Сводка рекомендаций в разрезе филиалов.
+    /// </summary>
+    [HttpGet("analysis/branches")]
+    public async Task<ActionResult<IReadOnlyList<BranchRecommendationSummary>>> GetBranchSummary(
+        CancellationToken cancellationToken)
+    {
+        using var session = _raven.OpenSession();
+
+        var recommendations = await session.Query<Recommendation>()
+            .ToListAsync(cancellationToken);
+
+        var branches = (await session.Query<Branch>().ToListAsync(cancellationToken))
+            .ToDictionary(x => x.Id);
+
+        var summary = recommendations
+            .GroupBy(x => string.IsNullOrWhiteSpace(x.BranchId) ? Branch.DefaultId : x.BranchId)
+            .Select(g => new BranchRecommendationSummary
+            {
+                BranchId = g.Key,
+                BranchName = branches.TryGetValue(g.Key, out var branch) ? branch.Name : g.Key,
+                Positions = g.Count(),
+                TotalQuantity = g.Sum(x => x.Quantity),
+                CalculatedQuantity = g.Sum(x => x.CalculatedQuantity),
+                MinAppliedPositions = g.Count(x =>
+                    x.MinPurchaseQuantity > 0 && x.CalculatedQuantity < x.MinPurchaseQuantity)
+            })
+            .OrderBy(x => x.BranchName)
+            .ToList();
+
+        return Ok(summary);
     }
 
     [HttpPost("analysis")]
@@ -289,10 +365,25 @@ public class RecommendationsController : ControllerBase
     [FromBody] RecommendationAnalysisRequest request,
     CancellationToken cancellationToken)
     {
+        if (request.PurchasePeriod == PurchasePeriods.Custom
+            && request.PurchaseTo.HasValue
+            && request.PurchaseTo.Value.Date < request.TargetDate.Date)
+        {
+            return BadRequest("Дата окончания периода закупки раньше даты начала.");
+        }
+
+        if (request.AnalysisFrom.HasValue && request.AnalysisTo.HasValue
+            && request.AnalysisFrom.Value.Date > request.AnalysisTo.Value.Date)
+        {
+            return BadRequest("Дата начала периода анализа позже даты окончания.");
+        }
+
+        var settings = await _settingsStore.LoadAsync(cancellationToken);
+
         using var session = _raven.OpenSession();
 
         var prompt = await _recommendationPreparationService
-            .BuildPromptAsync(session, request.TargetDate, cancellationToken);
+            .BuildPromptAsync(session, request, settings.Analysis, cancellationToken);
 
         var progress = new Progress<int>();
 
@@ -301,12 +392,20 @@ public class RecommendationsController : ControllerBase
 
         await _recommendationPreparationService.SaveRecommendationsAsync(
             session,
-            request.TargetDate,
+            prompt,
             result,
             cancellationToken);
 
         _raven.InvalidateCache(CacheKeys.Recommendations);
 
-        return NoContent();
+        return Ok(new
+        {
+            prompt.AnalysisFrom,
+            prompt.AnalysisTo,
+            prompt.PurchaseFrom,
+            prompt.PurchaseTo,
+            prompt.PurchasePeriod,
+            Count = result.Count
+        });
     }
 }

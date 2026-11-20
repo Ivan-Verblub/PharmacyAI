@@ -18,9 +18,15 @@ public class ApiClient
         int pageSize,
         string? search = null,
         string? sortBy = null,
-        bool sortDescending = false)
+        bool sortDescending = false,
+        string? branchId = null)
     {
         var url = $"{endpoint}/paged?page={page}&pageSize={pageSize}";
+
+        if (!string.IsNullOrWhiteSpace(branchId))
+        {
+            url += $"&branchId={Uri.EscapeDataString(branchId)}";
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -50,19 +56,19 @@ public class ApiClient
     public async Task Create<T>(string endpoint, T item)
     {
         var response = await _http.PostAsJsonAsync(endpoint, item);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
     }
 
     public async Task Update<T>(string endpoint, string id, T item)
     {
         var response = await _http.PutAsJsonAsync($"{endpoint}/{id}", item);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
     }
 
     public async Task Delete(string endpoint, string id)
     {
         var response = await _http.DeleteAsync($"{endpoint}/{id}");
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
     }
 
     public async Task DeleteMany(string endpoint, IEnumerable<string> ids)
@@ -80,16 +86,39 @@ public class ApiClient
             ?? new RecommendationAnalysisStatus();
     }
 
-    public async Task AnalyzeAsync(DateTime targetDate)
+    public async Task AnalyzeAsync(RecommendationAnalysisRequest request)
     {
         var response = await _http.PostAsJsonAsync(
             "api/recommendations/analysis",
-            new RecommendationAnalysisRequest
-            {
-                TargetDate = targetDate
-            });
+            request);
 
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
+    }
+
+    public async Task<List<BranchRecommendationSummary>> GetBranchSummaryAsync()
+    {
+        return await _http.GetFromJsonAsync<List<BranchRecommendationSummary>>(
+            "api/recommendations/analysis/branches") ?? [];
+    }
+
+    /// <summary>
+    /// Пробрасывает текст ошибки API (например, «Филиал используется…»), а не только код.
+    /// </summary>
+    private static async Task EnsureSuccessAsync(HttpResponseMessage response)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            return;
+        }
+
+        var message = await response.Content.ReadAsStringAsync();
+
+        throw new HttpRequestException(
+            string.IsNullOrWhiteSpace(message)
+                ? $"Ошибка API: {(int)response.StatusCode} {response.ReasonPhrase}"
+                : message.Trim('"'),
+            null,
+            response.StatusCode);
     }
 
     public async Task<IntegrationSettings> GetSettingsAsync()
@@ -101,7 +130,7 @@ public class ApiClient
     public async Task SaveSettingsAsync(IntegrationSettings settings)
     {
         var response = await _http.PutAsJsonAsync("api/settings", settings);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
     }
 
     public async Task ImportNowAsync(string entityType)

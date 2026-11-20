@@ -37,7 +37,14 @@ public class SettingsController : ControllerBase
             return BadRequest("Настройки не переданы.");
         }
 
-        ValidateSettings(settings);
+        try
+        {
+            ValidateSettings(settings);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
 
         await _settingsStore.SaveAsync(settings, cancellationToken);
 
@@ -78,6 +85,18 @@ public class SettingsController : ControllerBase
         ValidateImportSettings(settings.Product, nameof(settings.Product));
         ValidateImportSettings(settings.Flow, nameof(settings.Flow));
         ValidateImportSettings(settings.Stock, nameof(settings.Stock));
+
+        if (settings.Analysis.HistoryDays < 7 || settings.Analysis.HistoryDays > 3 * 366)
+        {
+            throw new ArgumentException(
+                "Период анализа должен быть от 7 до 1098 дней.");
+        }
+
+        if (settings.Analysis.ServiceLevelZ <= 0)
+        {
+            throw new ArgumentException(
+                "Коэффициент уровня сервиса должен быть больше нуля.");
+        }
 
         if (settings.Ai.TimeoutSeconds <= 0)
         {

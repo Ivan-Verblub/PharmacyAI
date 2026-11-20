@@ -1,4 +1,4 @@
-using UI.Services;
+﻿using UI.Services;
 using UI.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,7 +18,9 @@ builder.Services.AddScoped(sp =>
 
     return new HttpClient(handler)
     {
-        BaseAddress = new Uri("http://localhost:5298/")
+        BaseAddress = new Uri("http://localhost:5298/"),
+        // Анализ по нескольким филиалам и длинному периоду может занимать несколько минут.
+        Timeout = TimeSpan.FromMinutes(15)
     };
 });
 

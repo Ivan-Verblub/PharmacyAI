@@ -8,11 +8,20 @@
 
 <h1>Остатки</h1>
 
-<div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
-    <div class="w-auto mb-3" style="min-width: 320px;">
-        <ProductSelect Products="products"
-                       Value="@selectedProductId"
-                       ValueChanged="OnProductSelectedAsync" />
+<div class="toolbar">
+    <div class="d-flex gap-3 flex-wrap align-items-end">
+        <div style="min-width: 280px;">
+            <ProductSelect Products="products"
+                           Value="@selectedProductId"
+                           ValueChanged="OnProductSelectedAsync" />
+        </div>
+
+        <div style="min-width: 220px;">
+            <BranchSelect Branches="branches"
+                          IncludeAll="true"
+                          Value="@selectedBranchId"
+                          ValueChanged="OnBranchSelectedAsync" />
+        </div>
     </div>
 
     <Button Color="ButtonColor.Primary"
@@ -57,6 +66,9 @@
     private PagedResult<Stock> paged = new();
     private HashSet<string> SelectedIds = [];
     private List<Product> products = [];
+    private List<Branch> branches = [];
+    private List<MeasureUnit> units = [];
+    private string selectedBranchId = string.Empty;
 
     private EntityEditModal<Stock> stockModal = default!;
     private Stock editingStock = new();
@@ -81,25 +93,34 @@
             {
                 Name = "Product",
                 Header = "Товар",
-                Width = 3,
+                Width = 4,
                 ValueSelector = stock => stock.ProductId,
                 CellTemplate = stock => @<span>@GetProductName(stock.ProductId)</span>
             },
 
             new EntityColumn<Stock>
             {
+                Name = nameof(Stock.BranchId),
+                Header = "Филиал",
+                Width = 2,
+                ValueSelector = stock => stock.BranchId,
+                CellTemplate = stock => @<span>@GetBranchName(stock.BranchId)</span>
+            },
+
+            new EntityColumn<Stock>
+            {
                 Name = nameof(Stock.Quantity),
                 Header = "Количество",
-                Width = 3,
+                Width = 2,
                 ValueSelector = stock => stock.Quantity,
-                CellTemplate = stock => @<span>@stock.Quantity</span>
+                CellTemplate = stock => @<span>@stock.Quantity @GetUnitName(stock.ProductId)</span>
             },
 
             new EntityColumn<Stock>
             {
                 Name = nameof(Stock.Reserve),
                 Header = "Резерв",
-                Width = 3,
+                Width = 2,
                 ValueSelector = stock => stock.Reserve,
                 CellTemplate = stock => @<span>@stock.Reserve</span>
             },
@@ -126,6 +147,8 @@
     private async Task LoadProductsAsync()
     {
         products = await Api.GetAll<Product>("api/products");
+        branches = await Api.GetAll<Branch>("api/branches");
+        units = await Api.GetAll<MeasureUnit>("api/units");
     }
 
     private string GetProductName(string productId)
@@ -133,11 +156,36 @@
         return products.FirstOrDefault(x => x.Id == productId)?.Name ?? "—";
     }
 
+    private string GetBranchName(string branchId)
+    {
+        return branches.FirstOrDefault(x => x.Id == branchId)?.Name ?? "—";
+    }
+
+    private string GetUnitName(string productId)
+    {
+        var unitId = products.FirstOrDefault(x => x.Id == productId)?.UnitId;
+
+        return units.FirstOrDefault(x => x.Id == unitId)?.DisplayName ?? "шт.";
+    }
+
+    private async Task OnBranchSelectedAsync(string branchId)
+    {
+        selectedBranchId = branchId;
+        page = 1;
+
+        await LoadAsync();
+    }
+
     private RenderFragment<Stock> StockForm => stock => @<div>
         <div class="row g-3">
             <div class="col-md-6">
                 <ProductSelect Products="products"
                                @bind-Value="stock.ProductId" />
+            </div>
+
+            <div class="col-md-6">
+                <BranchSelect Branches="branches"
+                              @bind-Value="stock.BranchId" />
             </div>
 
             <div class="col-md-6">
@@ -172,8 +220,9 @@
                 page,
                 pageSize,
                 selectedProductId,
-                sortColumn.Name,
-                sortAscending);
+                sortColumn?.Name,
+                !sortAscending,
+                selectedBranchId);
 
             SelectedIds = [];
             errorMessage = null;
@@ -218,7 +267,10 @@
     private async Task OpenCreateAsync()
     {
         modalTitle = "Новый остаток";
-        editingStock = new Stock();
+        editingStock = new Stock
+        {
+            BranchId = string.IsNullOrWhiteSpace(selectedBranchId) ? Branch.DefaultId : selectedBranchId
+        };
 
         await stockModal.ShowAsync(editingStock);
     }
@@ -231,6 +283,7 @@
         {
             Id = stock.Id,
             ProductId = stock.ProductId,
+            BranchId = stock.BranchId,
             Quantity = stock.Quantity,
             Reserve = stock.Reserve,
             Transit = stock.Transit

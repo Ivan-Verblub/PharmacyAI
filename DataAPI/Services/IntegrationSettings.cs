@@ -6,6 +6,8 @@ public class IntegrationSettings
 
     public AiSettings Ai { get; set; } = new();
 
+    public AnalysisSettings Analysis { get; set; } = new();
+
     public ImportSettings Product { get; set; } = new();
     public ImportSettings Flow { get; set; } = new();
     public ImportSettings Stock { get; set; } = new();
@@ -18,6 +20,18 @@ public class AiSettings
     public string Model { get; set; } = "gemma4:31b";
     public string BaseUrl { get; set; } = "http://localhost:11434/v1/";
     public int TimeoutSeconds { get; set; } = 60;
+}
+
+public class AnalysisSettings
+{
+    /// <summary>Глубина анализа истории движений по умолчанию, дней.</summary>
+    public int HistoryDays { get; set; } = 90;
+
+    /// <summary>Z-коэффициент уровня сервиса для страхового запаса (1.65 ≈ 95%).</summary>
+    public double ServiceLevelZ { get; set; } = 1.65;
+
+    /// <summary>Период закупки по умолчанию на странице анализа.</summary>
+    public string DefaultPurchasePeriod { get; set; } = "Month";
 }
 
 public class ImportSettings

@@ -69,6 +69,55 @@
 
 <div class="card mb-4">
     <div class="card-header fw-semibold">
+        Анализ закупок
+    </div>
+
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Период анализа истории, дней</label>
+                <input class="form-control"
+                       type="number"
+                       min="7"
+                       max="1098"
+                       @bind="settings.Analysis.HistoryDays" />
+                <div class="form-text">
+                    Сколько последних дней движений учитывать при оценке спроса (ранее было зафиксировано 90).
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Период закупки по умолчанию</label>
+                <select class="form-select" @bind="settings.Analysis.DefaultPurchasePeriod">
+                    <option value="Week">Неделя</option>
+                    <option value="Month">Месяц</option>
+                    <option value="Quarter">Квартал</option>
+                    <option value="HalfYear">Полгода</option>
+                    <option value="Year">Год</option>
+                </select>
+                <div class="form-text">
+                    Подставляется на странице анализа; можно изменить перед расчётом.
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Уровень сервиса</label>
+                <select class="form-select" @bind="settings.Analysis.ServiceLevelZ">
+                    <option value="1.28">90% (Z = 1.28)</option>
+                    <option value="1.65">95% (Z = 1.65)</option>
+                    <option value="2.05">98% (Z = 2.05)</option>
+                    <option value="2.33">99% (Z = 2.33)</option>
+                </select>
+                <div class="form-text">
+                    Определяет размер страхового запаса.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header fw-semibold">
         Импорт данных
     </div>
 
@@ -154,9 +203,11 @@
             successMessage = "Настройки сохранены.";
             errorMessage = null;
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
-            errorMessage = "Не удалось сохранить настройки.";
+            errorMessage = string.IsNullOrWhiteSpace(ex.Message)
+                ? "Не удалось сохранить настройки."
+                : $"Не удалось сохранить настройки: {ex.Message}";
             successMessage = null;
         }
     }

@@ -1,4 +1,4 @@
-using DataAPI.Infrastructure;
+﻿using DataAPI.Infrastructure;
 using DataAPI.Services;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Operations;
@@ -17,7 +17,7 @@ builder.Services.AddSingleton<IRavenDbService, RavenDbService>();
 
 builder.Services.AddHttpClient<RecommendationAnalysisService>();
 builder.Services.AddScoped<RecommendationPreparationService>();
-builder.Services.AddHttpClient<RecommendationAnalysisService>();
+builder.Services.AddHostedService<DataMigrationService>();
 
 builder.Services.Configure<IntegrationSettings>(
     builder.Configuration.GetSection(IntegrationSettings.SectionName));
