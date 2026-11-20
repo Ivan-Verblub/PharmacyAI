@@ -64,6 +64,54 @@ public class FileImportReader
         }).ToList();
     }
 
+    public async Task<List<Branch>> ReadBranchesAsync(
+    ImportSettings settings,
+    CancellationToken cancellationToken)
+    {
+        var rows = await ReadRowsAsync(settings, cancellationToken);
+
+        return rows.Select(x => new Branch
+        {
+            Id = GetValue(x, "Id"),
+            Code = GetValue(x, "Code"),
+            Name = GetValue(x, "Name"),
+            Address = GetValue(x, "Address"),
+            IsActive = ReadIsActive(x)
+        }).ToList();
+    }
+
+    public async Task<List<Unit>> ReadUnitsAsync(
+        ImportSettings settings,
+        CancellationToken cancellationToken)
+    {
+        var rows = await ReadRowsAsync(settings, cancellationToken);
+
+        return rows.Select(x => new Unit
+        {
+            Id = GetValue(x, "Id"),
+            Code = GetValue(x, "Code"),
+            Name = GetValue(x, "Name"),
+            ShortName = GetValue(x, "ShortName")
+        }).ToList();
+    }
+
+    private static bool ReadIsActive(
+        Dictionary<string, string> row)
+    {
+        var value = GetValue(row, "IsActive");
+
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "true" or "1" => true,
+            "false" or "0" => false,
+            _ => throw new InvalidOperationException(
+                $"Некорректное значение IsActive: '{value}'.")
+        };
+    }
+
     private static async Task<List<Dictionary<string, string>>> ReadRowsAsync(
         ImportSettings settings,
         CancellationToken cancellationToken)

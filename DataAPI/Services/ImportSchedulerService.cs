@@ -35,6 +35,8 @@ public class ImportSchedulerService : BackgroundService
                 await RunIfDueAsync("Product", settings.Product, stoppingToken);
                 await RunIfDueAsync("Flow", settings.Flow, stoppingToken);
                 await RunIfDueAsync("Stock", settings.Stock, stoppingToken);
+                await RunIfDueAsync("Branch", settings.Branch, stoppingToken);
+                await RunIfDueAsync("Unit", settings.Unit, stoppingToken);
             }
             catch (OperationCanceledException)
             {

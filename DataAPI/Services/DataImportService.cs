@@ -1,5 +1,7 @@
 ﻿using DataAPI.Infrastructure;
 using DataAPI.Services;
+using DataAPI.Common;
+using DataAPI.Models;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Operations;
 using Raven.Client.Documents.Session;
@@ -45,6 +47,16 @@ public class DataImportService
                 cancellationToken),
 
             "Stock" => await ImportStocksAsync(
+                session,
+                settings,
+                cancellationToken),
+
+            "Branch" => await ImportBranchAsync(
+                session,
+                settings,
+                cancellationToken),
+
+            "Unit" => await ImportUnitAsync(
                 session,
                 settings,
                 cancellationToken),
@@ -108,6 +120,49 @@ public class DataImportService
 
         return items.Count;
     }
+    private async Task<int> ImportBranchAsync(
+        IAsyncDocumentSession session,
+        ImportSettings settings,
+        CancellationToken cancellationToken)
+    {
+        var items = await _reader.ReadBranchesAsync(
+            settings,
+            cancellationToken);
+
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.Id))
+            {
+                item.Id = Guid.NewGuid().ToString();
+            }
+
+            await session.StoreAsync(item, item.Id, cancellationToken);
+        }
+
+        return items.Count;
+    }
+
+    private async Task<int> ImportUnitAsync(
+        IAsyncDocumentSession session,
+        ImportSettings settings,
+        CancellationToken cancellationToken)
+    {
+        var items = await _reader.ReadUnitsAsync(
+            settings,
+            cancellationToken);
+
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.Id))
+            {
+                item.Id = Guid.NewGuid().ToString();
+            }
+
+            await session.StoreAsync(item, item.Id, cancellationToken);
+        }
+
+        return items.Count;
+    }
 
     private async Task<int> ImportFlowsAsync(
         IAsyncDocumentSession session,
@@ -152,4 +207,6 @@ public class DataImportService
 
         return items.Count;
     }
+
+
 }

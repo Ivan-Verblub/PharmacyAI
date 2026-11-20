@@ -60,6 +60,8 @@ public class SettingsController : ControllerBase
 
         var importSettings = entityType switch
         {
+            "Branch" => settings.Branch,
+            "Unit" => settings.Unit,
             "Product" => settings.Product,
             "Flow" => settings.Flow,
             "Stock" => settings.Stock,
@@ -85,6 +87,8 @@ public class SettingsController : ControllerBase
         ValidateImportSettings(settings.Product, nameof(settings.Product));
         ValidateImportSettings(settings.Flow, nameof(settings.Flow));
         ValidateImportSettings(settings.Stock, nameof(settings.Stock));
+        ValidateImportSettings(settings.Branch, nameof(settings.Branch));
+        ValidateImportSettings(settings.Unit, nameof(settings.Unit));
 
         if (settings.Analysis.HistoryDays < 7 || settings.Analysis.HistoryDays > 3 * 366)
         {

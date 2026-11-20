@@ -82,7 +82,7 @@
                        max="1098"
                        @bind="settings.Analysis.HistoryDays" />
                 <div class="form-text">
-                    Сколько последних дней движений учитывать при оценке спроса (ранее было зафиксировано 90).
+                    Сколько последних дней движений учитывать при оценке спроса.
                 </div>
             </div>
 
@@ -144,6 +144,22 @@
                                 Settings="settings.Stock"
                                 OnScheduleClicked="() => OpenScheduleModalAsync(settings.Stock, nameof(Stock))"
                                 OnImportClicked="() => ImportNowAsync(nameof(Stock))" />
+        </div>
+
+        <div class="col-md-4">
+            <ImportSettingsCard Title="Филиалы"
+                                EntityType="Branch"
+                                Settings="settings.Branch"
+                                OnScheduleClicked='() => OpenScheduleModalAsync(settings.Branch, nameof(Branch))'
+                                OnImportClicked='() => ImportNowAsync(nameof(Branch))' />
+        </div>
+
+        <div class="col-md-4">
+            <ImportSettingsCard Title="Единицы измерения"
+                                EntityType="Unit"
+                                Settings="settings.Unit"
+                                OnScheduleClicked='() => OpenScheduleModalAsync(settings.Unit, nameof(Unit))'
+                                OnImportClicked='() => ImportNowAsync(nameof(Unit))' />
         </div>
     </div>
 </div>
@@ -236,6 +252,14 @@
         else if (editingEntityType == "Stock")
         {
             settings.Stock.Schedule = CloneSchedule(editingSchedule);
+        }
+        else if (editingEntityType == "Branch")
+        {
+            settings.Branch.Schedule = CloneSchedule(editingSchedule);
+        }
+        else if (editingEntityType == "Unit")
+        {
+            settings.Unit.Schedule = CloneSchedule(editingSchedule);
         }
 
         await SaveSettingsAsync();

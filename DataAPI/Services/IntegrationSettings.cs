@@ -11,6 +11,8 @@ public class IntegrationSettings
     public ImportSettings Product { get; set; } = new();
     public ImportSettings Flow { get; set; } = new();
     public ImportSettings Stock { get; set; } = new();
+    public ImportSettings Branch { get; set; } = new();
+    public ImportSettings Unit { get; set; } = new();
 }
 
 public class AiSettings
